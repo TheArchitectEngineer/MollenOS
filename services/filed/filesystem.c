@@ -123,12 +123,19 @@ FileSystemNew(
 static void __DestroyDriver(
         _In_ FileSystem_t* fileSystem)
 {
+    oserr_t oserr;
+
     if (fileSystem->State != FileSystemState_CONNECTED) {
         return;
     }
 
+    // The interface is released also when Destroy fails, as nothing else
+    // uses it.
     if (fileSystem->Interface && fileSystem->Interface->Operations.Destroy) {
-        fileSystem->Interface->Operations.Destroy(fileSystem->Interface, fileSystem->Data, 0);
+        oserr = fileSystem->Interface->Operations.Destroy(fileSystem->Interface, fileSystem->Data, 0);
+        if (oserr != OS_EOK) {
+            WARNING("__DestroyDriver failed to destroy filesystem %u: %u", fileSystem->ID, oserr);
+        }
     }
     VFSInterfaceDelete(fileSystem->Interface);
 }
@@ -141,7 +148,8 @@ FileSystemDestroy(
           fileSystem->Storage->ID,
           fileSystem->SectorStart.QuadPart);
 
-    // Unmount and destroy all resources related to the VFS
+    // Unmount and destroy all resources related to the VFS. The VFS is
+    // already NULL when VFSFileSystemDisconnectInterface destroyed it.
     VFSDestroy(fileSystem->VFS);
 
     // Next is destroying the actual driver and the underlying
@@ -435,11 +443,12 @@ __Connect(
         _In_ struct VFSInterface* interface)
 {
     oserr_t oserr;
+    oserr_t destroyStatus;
     TRACE("__Connect(fs=%u)", fileSystem->ID);
 
     oserr = __InitializeInterface(fileSystem, interface);
     if (oserr != OS_EOK) {
-        ERROR("__Connect failed to initialize the underlying fs");
+        ERROR("__Connect failed to initialize the underlying fs: %u", oserr);
         return oserr;
     }
 
@@ -452,7 +461,17 @@ __Connect(
             &fileSystem->VFS
     );
     if (oserr != OS_EOK) {
-        ERROR("__Connect failed to initialize vfs data");
+        ERROR("__Connect failed to initialize vfs data: %u", oserr);
+
+        // The driver has set up the filesystem, and nothing else will
+        // destroy it, as the filesystem does not become connected.
+        if (interface->Operations.Destroy) {
+            destroyStatus = interface->Operations.Destroy(interface, fileSystem->Data, 0);
+            if (destroyStatus != OS_EOK) {
+                WARNING("__Connect failed to destroy the filesystem again: %u", destroyStatus);
+            }
+        }
+        fileSystem->Data = NULL;
     }
     return oserr;
 }
@@ -622,6 +641,9 @@ VFSFileSystemDisconnectInterface(
     if (fileSystem->State == FileSystemState_CONNECTED) {
         // The filesystem must already be detached from new opens. Drain its
         // records while the backend is live, including asynchronous closes.
+        // VFSDestroy first makes new lookups into the VFS fail with OS_ENOENT
+        // and waits for the operations already in it, so the driver's Destroy
+        // below never runs while one of them still waits for the driver.
         VFSDestroy(fileSystem->VFS);
         fileSystem->VFS = NULL;
         osStatus = fileSystem->Interface->Operations.Destroy(fileSystem->Interface, fileSystem->Data, flags);

@@ -156,10 +156,11 @@ oserr_t VFSNodeUnlink(struct VFS* vfs, const char* cpath)
         return oserr;
     }
 
-    // Find the requested entry in the containing folder
+    // Find the requested entry in the containing folder. A missing entry
+    // (OS_ENOENT) leaves node unset, so it ends the unlink as well.
     struct VFSNode* node;
     oserr = VFSNodeFind(containingDirectory, nodeName, &node);
-    if (oserr != OS_EOK && oserr != OS_ENOENT) {
+    if (oserr != OS_EOK) {
         goto exit;
     }
 

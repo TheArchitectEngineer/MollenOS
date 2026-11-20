@@ -30,6 +30,28 @@
 #include <vfs/interface.h>
 #include <vfs/stat.h>
 
+/**
+ * @brief Tells whether new operations can still start on a VFS.
+ * VFS_STATE_ACTIVE: VFSEnter succeeds and counts the operation.
+ * VFS_STATE_CLOSING: VFSDestroy has started. VFSEnter fails with OS_ENOENT,
+ *                    and VFSDestroy waits for the counted operations to leave.
+ */
+enum VFSState {
+    VFS_STATE_ACTIVE,
+    VFS_STATE_CLOSING
+};
+
+/**
+ * @brief One filesystem tree in filed, either the root scope (memfs) or a
+ * mounted partition. Nodes keep a pointer back to their VFS.
+ *
+ * A lookup or handler that works on nodes of a VFS must first enter it with
+ * VFSEnter, and leave it with VFSLeave when it no longer uses any of its nodes.
+ * VFSDestroy sets State to VFS_STATE_CLOSING and waits until Operations is
+ * zero before it frees the nodes. State and Operations are protected by
+ * StateLock. OperationsDone is signalled when the last operation leaves a VFS
+ * that is closing.
+ */
 struct VFS {
     uuid_t                 ID;
     guid_t                 Guid;
@@ -37,7 +59,10 @@ struct VFS {
     struct VFSStorage*     Storage;
     struct VFSInterface*   Interface;
     struct VFSNode*        Root;
-    struct usched_rwlock   Lock;
+    struct usched_mtx      StateLock;
+    struct usched_cnd      OperationsDone;
+    enum VFSState          State;
+    unsigned int           Operations;
     OSHandle_t             Buffer;
 };
 
@@ -218,7 +243,39 @@ extern oserr_t
 VFSNodeHandleRemove(
         _In_ uuid_t handleId);
 
+/**
+ * @brief Counts an operation on a VFS, so VFSDestroy waits for it. Every
+ * successful call must be matched by one call to VFSLeave. The caller must
+ * know the VFS is still allocated, for example because it holds a lock on a
+ * node that refers to it.
+ * @param vfs The VFS the operation works on.
+ * @return OS_EOK, or OS_ENOENT if the VFS is being destroyed.
+ */
+extern oserr_t
+VFSEnter(
+        _In_ struct VFS* vfs);
+
+/**
+ * @brief Ends an operation counted by VFSEnter. The VFS can be freed as soon
+ * as this returns, so the caller must not use it or its nodes afterwards.
+ * @param vfs The VFS that was entered.
+ */
+extern void
+VFSLeave(
+        _In_ struct VFS* vfs);
+
+/**
+ * @brief Looks up a path, starting at the root node of the given VFS. On
+ * success the returned node is reader locked, and the VFS it belongs to is
+ * entered (VFSEnter). Release both with exactly one call to VFSNodePut.
+ * @return OS_EOK, or OS_ENOENT if a part of the path is missing or a
+ *         filesystem on the path is being destroyed, or another lookup error.
+ */
 extern oserr_t VFSNodeGet(struct VFS* vfs, mstring_t* path, int followLinks, struct VFSNode** nodeOut);
+
+/**
+ * @brief Releases the reader lock and the VFS entry that VFSNodeGet took.
+ */
 extern void    VFSNodePut(struct VFSNode* node);
 
 /**

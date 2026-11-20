@@ -19,14 +19,56 @@
 #include <vfs/vfs.h>
 #include "../private.h"
 
+// Creates a directory and opens a handle on it. The parent directory is held
+// (VFSNodeGet) until the handle is open. Releasing it before the open would
+// let VFSDestroy free the new node in between, if the filesystem is torn
+// down at that moment.
 oserr_t VFSNodeMkdir(struct VFS* vfs, mstring_t* path, uint32_t access, uuid_t* handleOut)
 {
+    struct VFSNode* parent;
     struct VFSNode* node;
+    mstring_t*      parentPath;
+    mstring_t*      name;
     oserr_t         oserr;
 
-    oserr = VFSNodeNewDirectory(vfs, path, access, &node);
-    if (oserr != OS_EOK) {
-        return oserr;
+    if (vfs == NULL || path == NULL || handleOut == NULL) {
+        return OS_EINVALPARAMS;
     }
-    return VFSNodeOpenHandle(node, access, handleOut);
+
+    parentPath = mstr_path_dirname(path);
+    if (parentPath == NULL) {
+        return OS_EOOM;
+    }
+
+    name = mstr_path_basename(path);
+    if (name == NULL) {
+        mstr_delete(parentPath);
+        return OS_EOOM;
+    }
+
+    oserr = VFSNodeGet(vfs, parentPath, 1, &parent);
+    if (oserr != OS_EOK) {
+        goto cleanup;
+    }
+
+    oserr = VFSNodeCreateChild(
+            parent,
+            name,
+            FILE_FLAG_DIRECTORY,
+            access,
+            &node
+    );
+    if (oserr != OS_EOK) {
+        goto put;
+    }
+
+    oserr = VFSNodeOpenHandle(node, access, handleOut);
+
+put:
+    VFSNodePut(parent);
+
+cleanup:
+    mstr_delete(parentPath);
+    mstr_delete(name);
+    return oserr;
 }

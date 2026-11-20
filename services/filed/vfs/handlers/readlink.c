@@ -26,24 +26,26 @@ oserr_t VFSNodeReadLink(struct VFS* vfs, const char* cpath, mstring_t** linkOut)
     struct VFSNode* node;
     oserr_t         osStatus;
 
-    path = mstr_new_u8(cpath);
+    path = mstr_path_new_u8(cpath);
     if (path == NULL) {
         return OS_EOOM;
     }
 
-    osStatus = VFSNodeFind(vfs->Root, path, &node);
+    // The last element is not followed, the link itself is wanted. VFSNodeGet
+    // returns the node reader locked, and VFSNodePut releases it and the VFS
+    // entry it holds.
+    osStatus = VFSNodeGet(vfs, path, 0, &node);
+    mstr_delete(path);
     if (osStatus != OS_EOK) {
         return osStatus;
     }
 
-    usched_rwlock_r_lock(&node->Lock);
     if (node->Stats.Flags & __FILE_LINK) {
         *linkOut = mstr_clone(node->Stats.LinkTarget);
         osStatus = OS_EOK;
     } else {
         osStatus = OS_ELINKINVAL;
     }
-    usched_rwlock_r_unlock(&node->Lock);
     VFSNodePut(node);
     return osStatus;
 }

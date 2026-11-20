@@ -83,7 +83,10 @@ oserr_t VFSNodeUnmountPath(struct VFS* vfs, mstring_t* path)
         return oserr;
     }
 
-    usched_rwlock_w_lock(&node->Lock);
+    // VFSNodeGet returns the node reader locked. The reader lock is promoted,
+    // as taking the write lock while holding it would wait forever, and
+    // VFSNodePut releases the lock and the VFS entry afterwards.
+    usched_rwlock_w_promote(&node->Lock);
     if (!__NodeIsMountPoint(node)) {
         oserr = OS_EINVALPARAMS;
         goto exit;
@@ -93,6 +96,7 @@ oserr_t VFSNodeUnmountPath(struct VFS* vfs, mstring_t* path)
     node->TypeData = NULL;
 
 exit:
-    usched_rwlock_w_unlock(&node->Lock);
+    usched_rwlock_w_demote(&node->Lock);
+    VFSNodePut(node);
     return oserr;
 }

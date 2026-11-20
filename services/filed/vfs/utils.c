@@ -477,6 +477,7 @@ VFSNodeOpenHandle(
     void*                          data;
     mstring_t*                     nodePath;
     oserr_t                        oserr;
+    oserr_t                        closeStatus;
 
     nodePath = VFSNodeMakePath(node, 1);
     if (nodePath == NULL) {
@@ -526,11 +527,14 @@ VFSNodeOpenHandle(
     goto cleanup;
 
 file:
-    node->FileSystem->Interface->Operations.Close(
+    closeStatus = node->FileSystem->Interface->Operations.Close(
         node->FileSystem->Interface,
         node->FileSystem->Data,
         data
     );
+    if (closeStatus != OS_EOK) {
+        WARNING("VFSNodeOpenHandle failed to close the file again: %u", closeStatus);
+    }
 
 resource:
     // A cleanup event for an unpublished record is harmless: no table entry
@@ -587,11 +591,52 @@ oserr_t VFSNodeNewDirectory(struct VFS* vfs, mstring_t* path, uint32_t permissio
     return osStatus;
 }
 
+// Enters the VFS of a node and then takes a reader lock on the node. The VFS
+// must still be allocated, so the caller must hold a lock or VFS entry that
+// keeps the node reachable. Every successful call is undone by __UnlockNode.
+// Fails with OS_ENOENT when the VFS is being destroyed. The node is not
+// touched then, as VFSDestroy may free it as soon as it stops waiting.
+static oserr_t
+__LockNode(
+        _In_ struct VFSNode* node)
+{
+    oserr_t oserr;
+
+    oserr = VFSEnter(node->FileSystem);
+    if (oserr != OS_EOK) {
+        TRACE("__LockNode filesystem of %ms is being destroyed", node->Name);
+        return oserr;
+    }
+    usched_rwlock_r_lock(&node->Lock);
+    return OS_EOK;
+}
+
+// Releases the reader lock and the VFS entry __LockNode took. The VFS pointer
+// is read before the unlock, and VFSLeave is the last use of the node.
+static void
+__UnlockNode(
+        _In_ struct VFSNode* node)
+{
+    struct VFS* vfs = node->FileSystem;
+
+    usched_rwlock_r_unlock(&node->Lock);
+    VFSLeave(vfs);
+}
+
+// Resolves a path relative to a node. Each node the walk stands on is held
+// with __LockNode, so the VFS it belongs to cannot be destroyed under the
+// walk. When the walk moves to a node in another VFS (a bind or a mounted
+// filesystem), it enters that VFS before it releases the node it came from.
+// If that VFS is being destroyed, the walk fails with OS_ENOENT.
+// On success the returned node is held with __LockNode. On failure nothing is
+// held, and nodeOut is not set.
 oserr_t __GetRelative(struct VFSNode* from, mstring_t* path, int followLinks, struct VFSNode** nodeOut)
 {
-    oserr_t     oserr = OS_EOK;
-    mstring_t** tokens;
-    int         tokenCount;
+    oserr_t         oserr;
+    mstring_t**     tokens;
+    int             tokenCount;
+    struct VFSNode* node = from;
+    struct VFSNode* next;
     ENTRY("__GetRelative(path=%ms, followLinks=1)", path, followLinks);
 
     tokenCount = mstr_path_tokens(path, &tokens);
@@ -599,24 +644,30 @@ oserr_t __GetRelative(struct VFSNode* from, mstring_t* path, int followLinks, st
         return OS_EOOM;
     }
 
-    struct VFSNode* node = from;
-    struct VFSNode* next;
-    usched_rwlock_r_lock(&node->Lock);
+    oserr = __LockNode(node);
+    if (oserr != OS_EOK) {
+        mstrv_delete(tokens);
+        return oserr;
+    }
+
     for (int i = 0; i < tokenCount; i++) {
         TRACE("__GetRelative token[%i] = %ms", i, tokens[i]);
         // Assumptions on entry of this loop.
-        // node => current node, we have a reader lock on this
+        // node => current node, held with __LockNode
         // next => not used on entry
 
-        // Handle '.' and '..'
+        // Handle '.' and '..'. The parent is always in the same VFS, the root
+        // node of a mounted filesystem has no parent.
         if (!mstr_cmp(tokens[i], &g_dotToken)) {
             continue;
         } else if (!mstr_cmp(tokens[i], &g_dotdotToken)) {
             if (node->Parent) {
-                // Move one level up the tree
                 next = node->Parent;
-                usched_rwlock_r_lock(&next->Lock);
-                usched_rwlock_r_unlock(&node->Lock);
+                oserr = __LockNode(next);
+                if (oserr != OS_EOK) {
+                    break;
+                }
+                __UnlockNode(node);
                 node = next;
             }
             continue;
@@ -630,32 +681,35 @@ oserr_t __GetRelative(struct VFSNode* from, mstring_t* path, int followLinks, st
             break;
         }
 
-        // Get a lock on next while we 'process' next
-        usched_rwlock_r_lock(&next->Lock);
+        // Hold next while we 'process' next
+        oserr = __LockNode(next);
+        if (oserr != OS_EOK) {
+            break;
+        }
 
         // If a node is a not a regular file, but instead a redirect, then we must resolve
         // the redirect before continuing with the provided path. We must do this in a loop
-        // as it is possible for these redirects to be chained.
+        // as it is possible for these redirects to be chained. Every branch either
+        // replaces next with a held node, or releases next and sets oserr.
         for (;;) {
             if (__NodeIsSymlink(next)) {
                 struct VFSNode* real;
 
-                // If we are at last node, then we switch node based on sym or not
+                // The last element is not followed when the caller asked for
+                // the link itself.
                 if (i == (tokenCount - 1) && !followLinks) {
-                    usched_rwlock_r_unlock(&node->Lock);
-                    node = next;
                     break;
                 }
 
                 // OK in all other cases we *must* follow the symlink
                 // NOTE: we now end up with two reader locks on 'node'
                 oserr = __GetRelative(node, next->Stats.LinkTarget, followLinks, &real);
-                usched_rwlock_r_unlock(&next->Lock);
+                __UnlockNode(next);
                 if (oserr != OS_EOK) {
                     break;
                 }
 
-                // At this point, we have a lock on 'node' and 'real'
+                // At this point, we hold 'node' and 'real'
                 next = real;
             } else if (__NodeIsBindMount(next)) {
                 struct VFSNode* real = next->TypeData;
@@ -663,13 +717,18 @@ oserr_t __GetRelative(struct VFSNode* from, mstring_t* path, int followLinks, st
                     // *should* never happen
                     ERROR("__GetRelative discovered node having a NULL type-data but marked as bind mount");
                     oserr = OS_EUNKNOWN;
-                    usched_rwlock_r_unlock(&next->Lock);
+                    __UnlockNode(next);
                     break;
                 }
 
-                // make sure the new next (real) is locked
-                usched_rwlock_r_lock(&real->Lock);
-                usched_rwlock_r_unlock(&next->Lock);
+                // The bind source can be in another VFS. It is entered while
+                // the bind is still held, as VFSNodeDestroy removes the bind
+                // under its write lock before it frees the source.
+                oserr = __LockNode(real);
+                __UnlockNode(next);
+                if (oserr != OS_EOK) {
+                    break;
+                }
                 next = real;
             } else if (__NodeIsMountPoint(next)) {
                 struct VFS*     fs = next->TypeData;
@@ -678,37 +737,46 @@ oserr_t __GetRelative(struct VFSNode* from, mstring_t* path, int followLinks, st
                     // *should* never happen
                     ERROR("__GetRelative discovered node having a NULL type-data but marked as mountpoint");
                     oserr = OS_EUNKNOWN;
-                    usched_rwlock_r_unlock(&next->Lock);
+                    __UnlockNode(next);
                     break;
                 }
 
-                // make sure the new next (real) is locked
+                // The mounted VFS is entered while the mount point is still
+                // held. VFSFileSystemUnmount clears the mount point under its
+                // write lock before VFSDestroy runs, so fs is allocated here.
                 real = fs->Root;
-                usched_rwlock_r_lock(&real->Lock);
-                usched_rwlock_r_unlock(&next->Lock);
+                oserr = __LockNode(real);
+                __UnlockNode(next);
+                if (oserr != OS_EOK) {
+                    break;
+                }
                 next = real;
             } else {
                 break;
             }
         }
 
-        // Move one level down the tree, so we release the lock on the current
-        // node and move to 'next' which is locked by this point
-        usched_rwlock_r_unlock(&node->Lock);
+        // next is no longer held when the redirects failed.
+        if (oserr != OS_EOK) {
+            break;
+        }
+
+        // Move one level down the tree, so we release the current node and
+        // move to 'next' which is held by this point
+        __UnlockNode(node);
         node = next;
     }
 
+    // Don't keep the node if we failed to get the target node
+    mstrv_delete(tokens);
     if (oserr != OS_EOK) {
-        // Don't keep the lock if we failed to get the target node
-        usched_rwlock_r_unlock(&node->Lock);
+        __UnlockNode(node);
+        return oserr;
     }
 
-    // When exiting the loop, we must hold a reader lock still on
-    // node that needs to be unlocked.
-    mstrv_delete(tokens);
     *nodeOut = node;
     EXIT("__GetRelative");
-    return oserr;
+    return OS_EOK;
 }
 
 oserr_t VFSNodeGet(struct VFS* vfs, mstring_t* path, int followLinks, struct VFSNode** nodeOut)
@@ -724,5 +792,5 @@ void VFSNodePut(struct VFSNode* node)
     if (node == NULL) {
         return;
     }
-    usched_rwlock_r_unlock(&node->Lock);
+    __UnlockNode(node);
 }

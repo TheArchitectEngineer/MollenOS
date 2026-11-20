@@ -130,6 +130,7 @@ __CreateRootNode(
     hashtable_construct(&root->Children, 0,
                         sizeof(struct __VFSChild),
                         __ChildrenHash, __ChildrenCmp);
+    usched_mtx_init(&root->MountsLock, USCHED_MUTEX_PLAIN);
     hashtable_construct(&root->Mounts, 0,
                         sizeof(struct __VFSMount),
                         __MountsHash, __MountsCmp);
@@ -174,7 +175,10 @@ VFSNew(
     vfs->Storage = storage;
     vfs->Interface = interface;
     vfs->Data = data;
-    usched_rwlock_init(&vfs->Lock);
+    vfs->State = VFS_STATE_ACTIVE;
+    vfs->Operations = 0;
+    usched_mtx_init(&vfs->StateLock, USCHED_MUTEX_PLAIN);
+    usched_cnd_init(&vfs->OperationsDone);
 
     osStatus = __CreateRootNode(vfs, &vfs->Root);
     if (osStatus != OS_EOK) {
@@ -192,21 +196,80 @@ VFSNew(
     return OS_EOK;
 }
 
+oserr_t
+VFSEnter(
+        _In_ struct VFS* vfs)
+{
+    oserr_t oserr = OS_EOK;
+
+    usched_mtx_lock(&vfs->StateLock);
+    if (vfs->State != VFS_STATE_ACTIVE) {
+        oserr = OS_ENOENT;
+    } else {
+        vfs->Operations++;
+    }
+    usched_mtx_unlock(&vfs->StateLock);
+    return oserr;
+}
+
+void
+VFSLeave(
+        _In_ struct VFS* vfs)
+{
+    usched_mtx_lock(&vfs->StateLock);
+    if (vfs->Operations == 0) {
+        // A leave without a matching enter. Keep the count at zero so a
+        // waiting VFSDestroy is not held up forever.
+        ERROR("VFSLeave filesystem %u has no operations to end", vfs->ID);
+    } else {
+        vfs->Operations--;
+    }
+
+    // VFSDestroy waits with StateLock released, and can only free the VFS
+    // after it has taken StateLock again. This notification and the unlock
+    // below are therefore the last uses of vfs here.
+    if (vfs->Operations == 0 && vfs->State == VFS_STATE_CLOSING) {
+        usched_cnd_notify_all(&vfs->OperationsDone);
+    }
+    usched_mtx_unlock(&vfs->StateLock);
+}
+
+// Stops new operations on the VFS and waits for the ones that have already
+// entered it. A lookup that crosses into the VFS after this fails with
+// OS_ENOENT. An operation in flight keeps running until it is done. It may be
+// waiting for the filesystem driver, which waits for the storage driver. A
+// storage driver that has lost its disk fails the requests with an error, so
+// the wait ends.
+static void
+__WaitForOperations(
+        _In_ struct VFS* vfs)
+{
+    usched_mtx_lock(&vfs->StateLock);
+    vfs->State = VFS_STATE_CLOSING;
+    if (vfs->Operations != 0) {
+        NOTICE("VFSDestroy filesystem %u waits for %u operations", vfs->ID, vfs->Operations);
+        while (vfs->Operations != 0) {
+            usched_cnd_wait(&vfs->OperationsDone, &vfs->StateLock);
+        }
+        NOTICE("VFSDestroy filesystem %u has no operations left", vfs->ID);
+    }
+    usched_mtx_unlock(&vfs->StateLock);
+}
+
 void VFSDestroy(struct VFS* vfs)
 {
     if (vfs == NULL) {
         return;
     }
 
-    // OK when destryoing a VFS we want to make sure all nodes
-    // that are mounted somewhere are unmounted, and we want to
-    // make sure all mounts that point to this VFS are unmounted
-    // as well.
-    // TODO implement this, we need to keep track of mounts
+    // Nodes are only freed once no operation uses them any more. Handlers
+    // that work through an open handle instead of a path are not counted.
+    // They hold the handle table's reader lock, and VFSNodeDestroy closes
+    // every handle, which waits for them.
+    __WaitForOperations(vfs);
 
-    // Cleanup children of this? If someone has cloned this tree
-    // we have to make sure that there are no links back to this
-
+    // VFSNodeDestroy also undoes binds that point into this VFS, and the
+    // records of binds this VFS has into other ones.
     VFSNodeDestroy(vfs->Root);
     OSHandleDestroy(&vfs->Buffer);
     free(vfs);
@@ -263,9 +326,80 @@ void __CleanupChild(int index, const void* element, void* userContext)
     VFSNodeDestroy(child->Node);
 }
 
-void __CleanupMount(int index, const void* element, void* userContext)
+static void
+__FirstMount(
+    _In_ int         index,
+    _In_ const void* element,
+    _In_ void*       userContext)
 {
+    const struct __VFSMount* mount = element;
+    struct VFSNode**         target = userContext;
 
+    _CRT_UNUSED(index);
+    if (*target == NULL) {
+        *target = mount->Target;
+    }
+}
+
+// Undoes every bind that has this node as its source (VFSNodeBind). Each
+// target becomes a regular directory again, so a lookup can no longer reach
+// the node after it is freed. The locks are taken in the same order as in
+// VFSNodeBind and VFSNodeUnbind: the target's node lock first, then the
+// source's MountsLock. MountsLock is released before the target is locked, so
+// one target is taken at a time.
+static void
+__RemoveBindsToNode(
+    _In_ struct VFSNode* node)
+{
+    struct VFSNode* target;
+
+    for (;;) {
+        target = NULL;
+        usched_mtx_lock(&node->MountsLock);
+        hashtable_enumerate(&node->Mounts, __FirstMount, &target);
+        usched_mtx_unlock(&node->MountsLock);
+        if (target == NULL) {
+            break;
+        }
+
+        // A lookup that holds the target's reader lock may be about to cross
+        // into this node. It enters this node's VFS first, which fails while
+        // the VFS is closing, so it releases the lock and the write lock
+        // here is granted.
+        usched_rwlock_w_lock(&target->Lock);
+        if (__NodeIsBindMount(target) && target->TypeData == node) {
+            target->Type     = VFS_NODE_TYPE_REGULAR;
+            target->TypeData = NULL;
+        }
+
+        usched_mtx_lock(&node->MountsLock);
+        hashtable_remove(&node->Mounts, &(struct __VFSMount) { .Target = target });
+        usched_mtx_unlock(&node->MountsLock);
+        usched_rwlock_w_unlock(&target->Lock);
+        WARNING("VFSNodeDestroy removed the bind of %ms at %ms", node->Name, target->Name);
+    }
+}
+
+// Removes the record a bind target left in its source node (VFSNodeBind), when
+// the target is destroyed. Without this, the source keeps a pointer to the freed
+// target, and VFSNodeUnlink refuses to remove the source because it still
+// looks bound.
+static void
+__RemoveBindRecord(
+    _In_ struct VFSNode* node)
+{
+    struct VFSNode* source;
+
+    if (!__NodeIsBindMount(node) || node->TypeData == NULL) {
+        return;
+    }
+
+    source = node->TypeData;
+    usched_mtx_lock(&source->MountsLock);
+    hashtable_remove(&source->Mounts, &(struct __VFSMount) { .Target = node });
+    usched_mtx_unlock(&source->MountsLock);
+    node->Type     = VFS_NODE_TYPE_REGULAR;
+    node->TypeData = NULL;
 }
 
 void VFSNodeDestroy(struct VFSNode* node)
@@ -302,7 +436,8 @@ void VFSNodeDestroy(struct VFSNode* node)
     }
 
     hashtable_enumerate(&node->Children, __CleanupChild, NULL);
-    hashtable_enumerate(&node->Mounts, __CleanupMount, NULL);
+    __RemoveBindsToNode(node);
+    __RemoveBindRecord(node);
 
     hashtable_destroy(&node->Handles);
     hashtable_destroy(&node->Children);
