@@ -33,6 +33,9 @@
 //  - Abstract the storage medium, multiple mediums
 //  - Expand buckets s to 64 bit.
 
+// Writes the in-memory master record to both copies on disk. The error of the
+// first write that failed is returned. The secondary copy goes first, so a
+// failure while the primary is written leaves the primary at its old value.
 static oserr_t
 __UpdateMasterRecords(
         _In_ FileSystemMFS_t* mfs)
@@ -55,8 +58,8 @@ __UpdateMasterRecords(
             &sectorsTransferred
     );
     if (oserr != OS_EOK) {
-        ERROR("Failed to write (secondary) master-record to disk");
-        return OS_EUNKNOWN;
+        ERROR("Failed to write (secondary) master-record to disk: %u", oserr);
+        return oserr;
     }
 
     // Flush the primary copy
@@ -69,7 +72,7 @@ __UpdateMasterRecords(
             &sectorsTransferred
     );
     if (oserr != OS_EOK) {
-        ERROR("Failed to write (primary) master-record to disk");
+        ERROR("Failed to write (primary) master-record to disk: %u", oserr);
     }
     return oserr;
 }
@@ -133,11 +136,17 @@ MFSBucketMapSetLinkAndLength(
     uint8_t* bufferOffset;
     size_t   sectorOffset;
     size_t   sectorsTransferred;
+    uint32_t previousLink;
+    uint32_t previousLength;
     oserr_t  oserr;
     TRACE("MFSBucketMapSetLinkAndLength(bucket=%u, link=%u, length=%u)",
           bucket, link, length);
 
-    // Update in-memory map first
+    // Update in-memory map first, as the map sector is written from it. The
+    // old values are restored if the write fails, so the map in memory keeps
+    // matching the map on disk.
+    previousLink = mfs->BucketMap[(bucket * 2)];
+    previousLength = mfs->BucketMap[(bucket * 2) + 1];
     mfs->BucketMap[(bucket * 2)] = link;
     if (updateLength) {
         mfs->BucketMap[(bucket * 2) + 1] = length;
@@ -163,13 +172,22 @@ MFSBucketMapSetLinkAndLength(
             &sectorsTransferred
     );
     if (oserr != OS_EOK) {
-        ERROR("Failed to update the given map-sector %u on disk",
-              LODWORD(mfs->MasterRecord.MapSector + sectorOffset));
-        return OS_EUNKNOWN;
+        ERROR("Failed to update the given map-sector %u on disk: %u",
+              LODWORD(mfs->MasterRecord.MapSector + sectorOffset), oserr);
+        mfs->BucketMap[(bucket * 2)] = previousLink;
+        mfs->BucketMap[(bucket * 2) + 1] = previousLength;
+        return oserr;
     }
     return OS_EOK;
 }
 
+// Takes bucketCount buckets from the free list. Every map change is written
+// to disk when it is made, and the master record with the new free list head
+// is written last. A failed write ends the allocation with that write's error.
+// Map changes written before the failure stay on disk: the buckets they took
+// from the free list are then not reachable from it any more (lost space), but
+// no bucket is handed out twice. The in-memory free list head is only changed
+// when the master record was written.
 oserr_t
 MFSBucketMapAllocate(
         _In_ FileSystemMFS_t* mfs,
@@ -178,7 +196,9 @@ MFSBucketMapAllocate(
 {
     bucket_t i;
     bucket_t previous;
+    bucket_t previousFreeBucket;
     uint32_t bucketsLeft = bucketCount;
+    oserr_t  oserr;
 
     // Initiate the allocated record
     allocatedRecord->Link = mfs->MasterRecord.FreeBucket;
@@ -190,7 +210,6 @@ MFSBucketMapAllocate(
     previous = MFS_ENDOFCHAIN;
     while (bucketsLeft) {
         MapRecord_t currentRecord;
-        oserr_t     oserr;
 
         // Get length of i.
         oserr = MFSBucketMapGetLengthAndLink(mfs, i, &currentRecord);
@@ -218,7 +237,7 @@ MFSBucketMapAllocate(
             );
             if (oserr != OS_EOK) {
                 // Ehh that's not good, in theory we should cancel the transaction
-                return OS_EINCOMPLETE;
+                return oserr;
             }
 
             // Update the next record which will be our new free record
@@ -231,7 +250,7 @@ MFSBucketMapAllocate(
             );
             if (oserr != OS_EOK) {
                 // Ehh that's not good, in theory we should cancel the transaction
-                return OS_EINCOMPLETE;
+                return oserr;
             }
 
             // Manipulate with the current record so the code flow can continue
@@ -262,7 +281,7 @@ MFSBucketMapAllocate(
             oserr = MFSBucketMapSetLinkAndLength(mfs, previous, i, 0, false);
             if (oserr != OS_EOK) {
                 // Ehh that's not good, in theory we should cancel the transaction
-                return OS_EINCOMPLETE;
+                return oserr;
             }
         }
         previous = i;
@@ -271,8 +290,14 @@ MFSBucketMapAllocate(
 
     // At this point we have done the allocation and 'i' will point
     // to the next free record
+    previousFreeBucket = mfs->MasterRecord.FreeBucket;
     mfs->MasterRecord.FreeBucket = i;
-    return __UpdateMasterRecords(mfs);
+    oserr = __UpdateMasterRecords(mfs);
+    if (oserr != OS_EOK) {
+        ERROR("MFSBucketMapAllocate failed to store the new free bucket %u: %u", i, oserr);
+        mfs->MasterRecord.FreeBucket = previousFreeBucket;
+    }
+    return oserr;
 }
 
 oserr_t
@@ -308,8 +333,12 @@ MfsFreeBuckets(
         }
     }
 
-    // If there was no allocated buckets to start with then do nothing
+    // If there was no allocated buckets to start with then do nothing. The
+    // in-memory free list head is only changed when the master record was
+    // written, as in MFSBucketMapAllocate.
     if (previousBucket != MFS_ENDOFCHAIN) {
+        bucket_t previousFreeBucket = mfs->MasterRecord.FreeBucket;
+
         // Ok, so now update the pointer to free list
         oserr_t oserr = MFSBucketMapSetLinkAndLength(
                 mfs,
@@ -323,7 +352,12 @@ MfsFreeBuckets(
             return oserr;
         }
         mfs->MasterRecord.FreeBucket = startBucket;
-        return __UpdateMasterRecords(mfs);
+        oserr = __UpdateMasterRecords(mfs);
+        if (oserr != OS_EOK) {
+            ERROR("MfsFreeBuckets failed to store the new free bucket %u: %u", startBucket, oserr);
+            mfs->MasterRecord.FreeBucket = previousFreeBucket;
+        }
+        return oserr;
     }
     return OS_EOK;
 }

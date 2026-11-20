@@ -124,25 +124,22 @@ __DmaCheckWindows(
     _Out_Opt_ FdtDmaFault_t*            fault)
 {
     const FdtDmaWindow_t* window;
-    uint64_t              limit;
 
     for (uint32_t i = 0; i < child->Count; i++) {
         window = &child->Windows[i];
-
-        // Even on a 64-bit bus, a window tagged as 32-bit PCI memory must stay
-        // below 4 GiB.
-        limit = child->ChildLimit;
-        if (FDT_PCI_SPACE_FROM_ATTRIBUTES(window->ChildAttributes) == FdtPciSpaceMemory32 &&
-            limit > UINT32_MAX) {
-            limit = UINT32_MAX;
-        }
 
         if (!__DmaExtentValid(window->ParentBase, window->Length, parentLimit)) {
             __DmaSetFault(fault, FdtDmaFaultParentExtent, i, 0);
             return OS_EINVALPARAMS;
         }
 
-        if (!__DmaExtentValid(window->ChildBase, window->Length, limit)) {
+        // Only the child address cells bound a window, also on a PCI bus. The
+        // 32-bit or 64-bit memory tag of a PCI dma-ranges entry names the
+        // address space, and does not limit where the window may sit. The
+        // Raspberry Pi 4 firmware describes its PCIe inbound window at PCI
+        // address 0x4_00000000 with the 32-bit memory tag. Linux accepts it,
+        // and so does deviced's own PCI host parser.
+        if (!__DmaExtentValid(window->ChildBase, window->Length, child->ChildLimit)) {
             __DmaSetFault(fault, FdtDmaFaultChildExtent, i, 0);
             return OS_EINVALPARAMS;
         }

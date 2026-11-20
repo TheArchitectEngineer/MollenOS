@@ -51,12 +51,30 @@ extern stdio_ops_t g_pipeOps;
 extern stdio_ops_t g_ipcOps;
 extern stdio_ops_t g_netOps;
 
+static oserr_t __null_read(stdio_handle_t*, void*, size_t, size_t*);
+static oserr_t __null_write(stdio_handle_t*, const void*, size_t, size_t*);
+static oserr_t __null_seek(stdio_handle_t*, int, off64_t, long long*);
+static void    __null_close(stdio_handle_t*, int);
+
+// Operations for NULL_SIGNATURE descriptors. A process that inherits no
+// stdio gets stdin, stdout and stderr with this signature, and these streams
+// go nowhere. Every descriptor gets a real operations table, so code that
+// calls handle->Ops never has to check for a missing table. resize and ioctl
+// stay NULL, and their callers report ENOTSUP like they do for other
+// descriptors without them.
+static stdio_ops_t g_stdioNullOps = {
+    .read = __null_read,
+    .write = __null_write,
+    .seek = __null_seek,
+    .close = __null_close
+};
+
 stdio_ops_t*
 CRTSignatureOps(
         _In_ unsigned int signature)
 {
     switch (signature) {
-        case NULL_SIGNATURE: return NULL;
+        case NULL_SIGNATURE: return &g_stdioNullOps;
         case FMEM_SIGNATURE: return &g_fmemOps;
         case MEMORYSTREAM_SIGNATURE: return &g_memstreamOps;
         case PIPE_SIGNATURE: return &g_pipeOps;
@@ -72,6 +90,63 @@ CRTSignatureOps(
     return NULL;
 }
 
+// A stream that goes nowhere has nothing to read, so a read is end of file.
+static oserr_t
+__null_read(
+        _In_  stdio_handle_t* handle,
+        _In_  void*           buffer,
+        _In_  size_t          length,
+        _Out_ size_t*         bytesRead)
+{
+    _CRT_UNUSED(handle);
+    _CRT_UNUSED(buffer);
+    _CRT_UNUSED(length);
+    *bytesRead = 0;
+    return OS_EOK;
+}
+
+// The data is dropped, but the write reports every byte as written. A write
+// that failed would make printf in a service return an error, and a short
+// write would make the stream code retry or mark the stream with an error.
+static oserr_t
+__null_write(
+        _In_  stdio_handle_t* handle,
+        _In_  const void*     buffer,
+        _In_  size_t          length,
+        _Out_ size_t*         bytesWritten)
+{
+    _CRT_UNUSED(handle);
+    _CRT_UNUSED(buffer);
+    *bytesWritten = length;
+    return OS_EOK;
+}
+
+// The stream is always empty, so every position is 0. The text-mode read
+// path calls seek without checking for it, which is why it is present.
+static oserr_t
+__null_seek(
+        _In_  stdio_handle_t* handle,
+        _In_  int             origin,
+        _In_  off64_t         offset,
+        _Out_ long long*      positionOut)
+{
+    _CRT_UNUSED(handle);
+    _CRT_UNUSED(origin);
+    _CRT_UNUSED(offset);
+    *positionOut = 0;
+    return OS_EOK;
+}
+
+// There is no context and no OS handle to release.
+static void
+__null_close(
+        _In_ stdio_handle_t* handle,
+        _In_ int             options)
+{
+    _CRT_UNUSED(handle);
+    _CRT_UNUSED(options);
+}
+
 void
 StdioConfigureStandardHandles(void)
 {
@@ -79,10 +154,10 @@ StdioConfigureStandardHandles(void)
     stdio_handle_t* stdinHandle;
     stdio_handle_t* stderrHandle;
     int             status;
-    // Make sure all default handles have been set for std. The operations for
-    // stdout and stderr will be null operations, as no output has been specified
-    // for this process. If the process wants to get output it must reopen the
-    // stdout/stderr handles.
+    // Make sure all default handles have been set for std. A process that
+    // inherits no stdio gets NULL_SIGNATURE descriptors, whose operations drop
+    // writes and read end of file. If the process wants to get output it must
+    // reopen the stdout/stderr handles.
     stdoutHandle = stdio_handle_get(STDOUT_FILENO);
     if (!stdoutHandle) {
         status = stdio_handle_create(

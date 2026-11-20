@@ -88,6 +88,11 @@ __ReadCurrentBucket(
     return osStatus;
 }
 
+// Adds buckets to the end of a directory. The new buckets are zeroed before
+// the directory links to them. If the link came first and zeroing failed, the
+// directory would read the old bucket contents as records. A failure after the
+// allocation leaves the allocated buckets unused (lost space), but the
+// directory itself stays as it was.
 static oserr_t
 __ExpandDirectory(
         _In_ FileSystemMFS_t* mfs,
@@ -98,7 +103,13 @@ __ExpandDirectory(
 
     oserr = MFSBucketMapAllocate(mfs, MFS_DIRECTORYEXPANSION, mapRecord);
     if (oserr != OS_EOK) {
-        ERROR("__ExpandDirectory failed to allocate bucket for expansion");
+        ERROR("__ExpandDirectory failed to allocate bucket for expansion: %u", oserr);
+        return oserr;
+    }
+
+    oserr = MfsZeroBucket(mfs, mapRecord->Link, mapRecord->Length);
+    if (oserr != OS_EOK) {
+        ERROR("__ExpandDirectory failed to zero bucket %u: %u", mapRecord->Link, oserr);
         return oserr;
     }
 
@@ -110,17 +121,19 @@ __ExpandDirectory(
             true
     );
     if (oserr != OS_EOK) {
-        ERROR("__ExpandDirectory failed to update bucket-link for expansion");
-        return oserr;
-    }
-
-    oserr = MfsZeroBucket(mfs, mapRecord->Link, mapRecord->Length);
-    if (oserr != OS_EOK) {
-        ERROR("__ExpandDirectory failed to zero bucket %u", mapRecord->Link);
+        ERROR("__ExpandDirectory failed to update bucket-link for expansion: %u", oserr);
     }
     return oserr;
 }
 
+// Gives an empty directory its first buckets. The steps are:
+// 1. Allocate the buckets.
+// 2. Zero them, so they hold no records.
+// 3. Store the buckets in the directory's record.
+// The record is updated last, so a directory never points at buckets that were
+// not zeroed. If a step fails, the error is returned and entry keeps its old
+// values, which match the record on disk. Buckets allocated before the failure
+// stay allocated and unused (lost space).
 static oserr_t
 __InitiateDirectory(
         _In_ FileSystemMFS_t* mfs,
@@ -128,62 +141,81 @@ __InitiateDirectory(
         _In_ uint32_t*        bucketOut)
 {
     MapRecord_t record;
+    MFSEntry_t  previous;
     oserr_t     oserr;
     TRACE("__InitiateDirectory(entry=%ms)", entry->Name);
 
-    // Allocate bucket
     oserr = MFSBucketMapAllocate(mfs, MFS_DIRECTORYEXPANSION, &record);
     if (oserr != OS_EOK) {
-        ERROR("__InitiateDirectory failed to allocate bucket for expansion");
+        ERROR("__InitiateDirectory failed to allocate bucket for expansion: %u", oserr);
+        return oserr;
+    }
+    TRACE("__InitiateDirectory allocated %u of length %u", record.Link, record.Length);
+
+    oserr = MfsZeroBucket(mfs, record.Link, record.Length);
+    if (oserr != OS_EOK) {
+        ERROR("__InitiateDirectory failed to zero bucket %u: %u", record.Link, oserr);
         return oserr;
     }
 
-    // Update the bucket info in the stored record
-    TRACE("__InitiateDirectory allocated %u of length %u", record.Link, record.Length);
+    // Update the bucket info in the stored record, and the read context
+    memcpy(&previous, entry, sizeof(MFSEntry_t));
     entry->StartBucket = record.Link;
     entry->StartLength = record.Length;
-
-    // Update the read context
     entry->DataBucketPosition = record.Link;
     entry->DataBucketLength = record.Length;
 
-    // Update the stored record
     oserr = MfsUpdateRecord(mfs, entry, MFS_ACTION_UPDATE);
     if (oserr != OS_EOK) {
-        ERROR("__InitiateDirectory failed to update bucket-link for expansion");
+        ERROR("__InitiateDirectory failed to update bucket-link for expansion: %u", oserr);
+        entry->StartBucket = previous.StartBucket;
+        entry->StartLength = previous.StartLength;
+        entry->DataBucketPosition = previous.DataBucketPosition;
+        entry->DataBucketLength = previous.DataBucketLength;
         return oserr;
     }
 
-    // Zero the bucket
-    oserr = MfsZeroBucket(mfs, record.Link, record.Length);
-    if (oserr != OS_EOK) {
-        ERROR("__InitiateDirectory failed to zero bucket %u", record.Link);
-    }
-
     *bucketOut = record.Link;
-    return oserr;
+    return OS_EOK;
 }
+
+/**
+ * The outcome of a directory search that could read the whole directory.
+ * MFS_SEARCH_FOUND: an entry with the name exists, and the result entry describes it.
+ * MFS_SEARCH_MISSING: no entry has the name. When expansion was allowed, the
+ *                     result entry's Directory* members describe a free record.
+ */
+enum MFSSearchResult {
+    MFS_SEARCH_FOUND,
+    MFS_SEARCH_MISSING
+};
 
 /**
  * Finds an entry matching the name given, or returns a free entry. A guarantee of a free entry can only be made
  * if the <allowExpansion> is set to a non-zero value.
- * 
- * @param fileSystem        [In] A pointer to an instance of the filesystem data.
+ *
+ * The return value only reports whether the search worked. A missing name
+ * comes back as OS_EOK with MFS_SEARCH_MISSING, so a disk error can never be
+ * taken for a missing name. A storage driver that lost its disk fails reads
+ * and writes with OS_ENOENT, the code a missing name used to have.
+ *
  * @param mfs               [In] A pointer to an instance of the mfs data.
  * @param directory         [In] The directory that should be searched.
  * @param entryName         [In] Name of the entry that we are searchin for.
  * @param allowExpansion    [In] Whether or not we can expand the directory if no free entry was found.
  * @param resultEntry       [In] A pointer to an MfsEntry_t structure where the found entry can be stored.
- * @return                  OsExists if entry with <entryName> was found, OsNotExists if a free entry was found.
- *                          Any other Os* value is indicative of an error.
+ * @param searchResultOut   [Out] Set to the outcome of the search when OS_EOK is returned.
+ * @return                  OS_EOK if the search finished, or the error of the disk operation
+ *                          or allocation that failed.
  */
 static oserr_t
 __FindEntryOrFreeInDirectory(
-        _In_ FileSystemMFS_t* mfs,
-        _In_ MFSEntry_t*      directory,
-        _In_ mstring_t*       entryName,
-        _In_ int              allowExpansion,
-        _In_ MFSEntry_t*      resultEntry)
+        _In_  FileSystemMFS_t*      mfs,
+        _In_  MFSEntry_t*           directory,
+        _In_  mstring_t*            entryName,
+        _In_  int                   allowExpansion,
+        _In_  MFSEntry_t*           resultEntry,
+        _Out_ enum MFSSearchResult* searchResultOut)
 {
     uint32_t currentBucket = directory->StartBucket;
     oserr_t  oserr;
@@ -194,10 +226,12 @@ __FindEntryOrFreeInDirectory(
     // if expansion is allowed, we must allocate a new bucket for it first.
     if (currentBucket == MFS_ENDOFCHAIN) {
         if (!allowExpansion) {
-            return OS_ENOENT;
+            *searchResultOut = MFS_SEARCH_MISSING;
+            return OS_EOK;
         }
         oserr = __InitiateDirectory(mfs, directory, &currentBucket);
         if (oserr != OS_EOK) {
+            ERROR("__FindEntryOrFreeInDirectory failed to set up directory %ms: %u", directory->Name, oserr);
             return oserr;
         }
     }
@@ -210,13 +244,12 @@ __FindEntryOrFreeInDirectory(
     while (1) {
         FileRecord_t* record = NULL;
         MapRecord_t   link;
-        int           exitLoop = 0;
 
         TRACE("__FindEntryOrFreeInDirectory: reading bucket %u", currentBucket);
         oserr = __ReadCurrentBucket(mfs, currentBucket, &link);
         if (oserr != OS_EOK) {
-            ERROR("__FindEntryOrFreeInDirectory failed to read directory bucket");
-            break;
+            ERROR("__FindEntryOrFreeInDirectory failed to read directory bucket: %u", oserr);
+            return oserr;
         }
 
         // Iterate the number of records in a bucket
@@ -258,15 +291,10 @@ __FindEntryOrFreeInDirectory(
                         i,
                         resultEntry
                 );
-                oserr    = OS_EEXISTS;
-                exitLoop = 1;
-                break;
+                *searchResultOut = MFS_SEARCH_FOUND;
+                return OS_EOK;
             }
             record++;
-        }
-
-        if (exitLoop) {
-            break;
         }
 
         // OK when link == MFS_ENDOFCHAIN, then we are at the end of the current directory,
@@ -280,25 +308,23 @@ __FindEntryOrFreeInDirectory(
                 // Expand directory as we have not found a free record
                 oserr = __ExpandDirectory(mfs, currentBucket, &link);
                 if (oserr != OS_EOK) {
-                    ERROR("__FindEntryOrFreeInDirectory failed to expand directory");
-                    break;
+                    ERROR("__FindEntryOrFreeInDirectory failed to expand directory: %u", oserr);
+                    return oserr;
                 }
 
                 // update free record to reflect the first entry in new bucket
                 resultEntry->DirectoryBucket = link.Link;
                 resultEntry->DirectoryLength = link.Length;
                 resultEntry->DirectoryIndex  = 0;
-            } else {
-                TRACE("__FindEntryOrFreeInDirectory didn't exist!");
-                oserr = OS_ENOENT;
             }
-            break;
+            TRACE("__FindEntryOrFreeInDirectory didn't exist!");
+            *searchResultOut = MFS_SEARCH_MISSING;
+            return OS_EOK;
         }
 
         // Update current bucket pointer
         currentBucket = link.Link;
     }
-    return oserr;
 }
 
 static MFSEntry_t*
@@ -416,10 +442,11 @@ MfsLocateRecord(
         _In_  mstring_t*       path,
         _Out_ MFSEntry_t**     entryOut)
 {
-    oserr_t     oserr;
-    MFSEntry_t  currentEntry;
-    mstring_t** tokens;
-    int         tokenCount;
+    oserr_t              oserr;
+    MFSEntry_t           currentEntry;
+    mstring_t**          tokens;
+    int                  tokenCount;
+    enum MFSSearchResult searchResult;
     TRACE("MfsLocateRecord(fileSystem=%ms, directory=%ms, path=%ms)",
           mfs->Label, directory->Name, path);
 
@@ -445,16 +472,21 @@ MfsLocateRecord(
         mstring_t* token = tokens[i];
         bool       isLast = i == (tokenCount - 1);
 
-        // lookup the token in the current folder, this function will either return
-        // OsExists or OsNotExists.
+        // lookup the token in the current folder. A failed search returns the
+        // disk error, which is passed on as it is.
         oserr = __FindEntryOrFreeInDirectory(
                 mfs, &currentEntry,
                 token, 0,
-                &currentEntry
+                &currentEntry,
+                &searchResult
         );
+        if (oserr != OS_EOK) {
+            ERROR("MfsLocateRecord failed to search for %ms: %u", token, oserr);
+            break;
+        }
 
         // If the entry was located, we must do some checks
-        if (oserr == OS_EEXISTS) {
+        if (searchResult == MFS_SEARCH_FOUND) {
             if (isLast) {
                 MFSEntry_t* entry = __MFSEntryClone(&currentEntry);
                 __CleanupEntryIterator(&currentEntry);
@@ -484,7 +516,8 @@ MfsLocateRecord(
             }
             __CleanupEntryIterator(&currentEntry);
         } else {
-            // Entry was not found, leave the osStatus and break
+            // Entry was not found
+            oserr = OS_ENOENT;
             break;
         }
     }
@@ -507,36 +540,59 @@ MfsCreateRecord(
         _In_  uint32_t         startLength,
         _Out_ MFSEntry_t**     entryOut)
 {
-    oserr_t    oserr;
-    MFSEntry_t nextEntry = { 0 };
+    oserr_t              oserr;
+    MFSEntry_t           nextEntry = { 0 };
+    enum MFSSearchResult searchResult;
 
     TRACE("MfsCreateRecord(fileSystem=%ms, flags=0x%x, path=%ms)",
           mfs->Label, flags, name);
 
+    // The search sets up the directory's first bucket or expands it when it
+    // has no free record. A failure there (a failed disk write in the bucket
+    // map, the master record or the directory record) ends the create, and
+    // that error is what the caller gets.
     oserr = __FindEntryOrFreeInDirectory(
             mfs,
             entry,
             name,
             1,
-            &nextEntry
+            &nextEntry,
+            &searchResult
     );
-    if (oserr == OS_ENOENT) {
-        oserr = __CreateEntryInDirectory(
-                mfs,
-                name,
-                owner,
-                flags,
-                permissions,
-                allocatedSize,
-                size,
-                startBucket,
-                startLength,
-                nextEntry.DirectoryBucket,
-                nextEntry.DirectoryLength,
-                nextEntry.DirectoryIndex,
-                entryOut
-        );
+    if (oserr != OS_EOK) {
+        ERROR("MfsCreateRecord failed to find a free record for %ms: %u", name, oserr);
+        goto cleanup;
     }
+
+    if (searchResult == MFS_SEARCH_FOUND) {
+        oserr = OS_EEXISTS;
+        goto cleanup;
+    }
+
+    // With expansion allowed, a missing name always comes with a free record.
+    if (nextEntry.DirectoryBucket == MFS_ENDOFCHAIN) {
+        ERROR("MfsCreateRecord found no free record for %ms", name);
+        oserr = OS_EUNKNOWN;
+        goto cleanup;
+    }
+
+    oserr = __CreateEntryInDirectory(
+            mfs,
+            name,
+            owner,
+            flags,
+            permissions,
+            allocatedSize,
+            size,
+            startBucket,
+            startLength,
+            nextEntry.DirectoryBucket,
+            nextEntry.DirectoryLength,
+            nextEntry.DirectoryIndex,
+            entryOut
+    );
+
+cleanup:
     __CleanupEntryIterator(&nextEntry);
     TRACE("MfsCreateRecord returns=%u", oserr);
     return oserr;

@@ -268,7 +268,9 @@ typedef struct FdtDmaFault {
  *        or logging.
  *
  * Checks cell counts, PCI memory flags, address bounds, and child-address
- * overlaps. A 32-bit PCI memory window must end at or below 4 GiB. Output
+ * overlaps. Only the child address cells bound a window. The 32-bit PCI
+ * memory tag does not keep a window below 4 GiB, as the Raspberry Pi 4
+ * firmware places its 32-bit tagged PCIe window at 0x4_00000000. Output
  * stays untouched on failure. A missing property (State = FdtDmaPropertyAbsent)
  * and an empty property (State = FdtDmaPropertyIdentity) both succeed and
  * stay distinct.
