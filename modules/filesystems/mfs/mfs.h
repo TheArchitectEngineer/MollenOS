@@ -34,6 +34,7 @@
 #include <os/mollenos.h>
 #include <os/types/handle.h>
 #include <os/types/shm.h>
+#include <os/usched/mutex.h>
 #include <ds/mstring.h>
 
 /**
@@ -50,6 +51,7 @@
 #define MFS_ACTION_UPDATE   0x1
 #define MFS_ACTION_CREATE   0x2
 #define MFS_ACTION_DELETE   0x3
+#define MFS_ACTION_RENAME   0x4 // Only the name of the record changes
 
 PACKED_TYPESTRUCT(BootRecord, {
     uint8_t  JumpCode[3];
@@ -245,8 +247,29 @@ typedef struct MFSEntry {
 
 /**
  * @brief Mounted filesystem geometry, transfer buffer and cached disk records.
+ *
+ * Lock: every operation on a mount (FsOpen, FsCreate, FsRead and the others
+ * in main.c) holds Lock from start to end. Each request from filed runs as its
+ * own job, and a job lets other jobs run each time it waits for the disk. One
+ * mount has one TransferBuffer, so without the lock a second operation could
+ * read into the buffer while the first one still has data in it. Lock protects:
+ * - TransferBuffer.
+ * - BucketMap and MasterRecord in memory.
+ * - The read, change and write steps on a directory bucket. A record is added
+ *   by reading the bucket, changing it in the buffer and writing it back. The
+ *   lock must cover all three steps, so it is held from the start of the
+ *   operation to its end. A lock around each single disk transfer would leave
+ *   gaps between the steps.
+ * The cost: operations on one mount run one at a time. This includes file
+ *   reads and writes that move data straight to the caller's buffer. Other
+ *   mounts are not held up.
+ * Lock is plain (not recursive). Only the outer Fs* functions take it, and
+ *   none of them calls another one. FsInitialize does not take it, as filed
+ *   gets the mount only when FsInitialize returns. FsDestroy only checks that
+ *   it is free (see FsDestroy in main.c).
  */
 typedef struct FileSystemMFS {
+    struct usched_mtx           Lock;
     mstring_t*                  Label;
     unsigned int                Flags;
     int                         Version;
@@ -363,6 +386,20 @@ MfsEnsureRecordSpace(
         _In_ MFSEntry_t*      entry,
         _In_ uint64_t         spaceRequired);
 
+/**
+ * @brief Sets the position of an entry to the start of its data. The data
+ * bucket becomes the first bucket of the entry (StartBucket and StartLength).
+ * An entry without buckets gets the data bucket MFS_ENDOFCHAIN with a length
+ * of 0. FsWriteToFile and FsReadFromFile see MFS_ENDOFCHAIN and look up the
+ * bucket of the position once the file has buckets. FsReadFromDirectory reads
+ * from the data bucket as it is. Every MFSEntry_t that is made for a record
+ * (open, create, the root) must be set up this way.
+ * @param entry Entry to update. StartBucket and StartLength must be set.
+ */
+extern void
+MFSEntryResetPosition(
+        _In_ MFSEntry_t* entry);
+
 /* MfsUpdateRecord
  * Conveniance function for updating a given file on
  * the disk, not data related to file, but the metadata */
@@ -372,8 +409,54 @@ MfsUpdateRecord(
         _In_ MFSEntry_t*      entry,
         _In_ int              action);
 
+// Returns whether path is the root of the filesystem, "/".
+static inline bool __PathIsRoot(mstring_t* path) {
+    if (mstr_at(path, 0) == U'/' && mstr_len(path) == 1) {
+        return true;
+    }
+    return false;
+}
+
 /**
- * @brief Locates a path, starting from the given directory.
+ * The outcome of a record search that could read every directory it needed.
+ * MFS_SEARCH_FOUND: an entry with the name exists, and the result entry describes it.
+ * MFS_SEARCH_MISSING: no entry has the name. For a search that may expand the
+ *                     directory, the result entry's Directory* members describe
+ *                     a free record.
+ */
+enum MFSSearchResult {
+    MFS_SEARCH_FOUND,
+    MFS_SEARCH_MISSING
+};
+
+/**
+ * @brief Looks up a path, starting from the given directory. A missing path is
+ * reported through searchResultOut, so it is never mixed up with a disk error.
+ * A storage driver that lost its disk fails reads with OS_ENOENT.
+ * @param mfs Mounted filesystem.
+ * @param directory Directory the path starts in.
+ * @param path Path to look up. "/" gives a copy of the root entry.
+ * @param entryOut Receives a new entry for the record when it was found. Free
+ *                 it with mstr_delete(entry->Name) and free(entry).
+ * @param searchResultOut Receives MFS_SEARCH_FOUND or MFS_SEARCH_MISSING when
+ *                        OS_EOK is returned. A directory on the way that has
+ *                        no buckets yet makes the path missing.
+ * @return OS_EOK when the search finished, OS_ENOTDIR when a part of the path
+ *         before the last is not a directory, OS_EINVALPARAMS for an empty
+ *         path, OS_EOOM, or the error of the disk read that failed.
+ */
+extern oserr_t
+MfsFindRecord(
+        _In_  FileSystemMFS_t*      mfs,
+        _In_  MFSEntry_t*           directory,
+        _In_  mstring_t*            path,
+        _Out_ MFSEntry_t**          entryOut,
+        _Out_ enum MFSSearchResult* searchResultOut);
+
+/**
+ * @brief Locates a path, starting from the given directory. The same as
+ * MfsFindRecord, but a missing path is returned as OS_ENOENT. Callers that
+ * must tell a missing path from a failed disk use MfsFindRecord.
  * @param mfs
  * @param directory
  * @param path

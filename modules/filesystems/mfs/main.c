@@ -35,9 +35,17 @@ oserr_t FsReadFromFile(FileSystemMFS_t*, MFSEntry_t*, uuid_t, void*, size_t, siz
 oserr_t FsWriteToFile(FileSystemMFS_t*, MFSEntry_t*, uuid_t, void*, size_t, size_t, size_t*);
 oserr_t FsSeekInFile(FileSystemMFS_t*, MFSEntry_t*, uint64_t);
 
+oserr_t FsChangeFileSize(FileSystemMFS_t*, MFSEntry_t*, uint64_t);
+
 // Directory specific operation handlers
 oserr_t FsReadFromDirectory(FileSystemMFS_t*, MFSEntry_t*, void*, size_t, size_t, size_t*);
 oserr_t FsSeekInDirectory(FileSystemMFS_t*, MFSEntry_t*, uint64_t);
+
+// Locking: each Fs* function that filed calls on a mounted filesystem takes
+// mfs->Lock, calls a static function that does the work and releases the lock
+// again (see FileSystemMFS_t in mfs.h). The static functions never take the
+// lock, so they can call each other. A Fs* function never calls another Fs*
+// function, as the lock is not recursive and the job would wait for itself.
 
 static void MFSEntryDelete(MFSEntry_t* entry)
 {
@@ -49,15 +57,14 @@ static void MFSEntryDelete(MFSEntry_t* entry)
     free(entry);
 }
 
-oserr_t
-FsOpen(
-        _In_      void*      instanceData,
-        _In_      mstring_t* path,
-        _Out_Opt_ void**     dataOut)
+static oserr_t
+__OpenPath(
+        _In_      FileSystemMFS_t* mfs,
+        _In_      mstring_t*       path,
+        _Out_Opt_ void**           dataOut)
 {
-    FileSystemMFS_t* mfs = instanceData;
-    oserr_t          osStatus;
-    MFSEntry_t*      mfsEntry;
+    oserr_t     osStatus;
+    MFSEntry_t* mfsEntry;
     TRACE("FsOpen=(path=%ms)", path);
 
     osStatus = MfsLocateRecord(
@@ -75,22 +82,36 @@ FsOpen(
 }
 
 oserr_t
-FsCreate(
-        _In_  void*      instanceData,
-        _In_  void*      data,
-        _In_  mstring_t* name,
-        _In_  uint32_t   owner,
-        _In_  uint32_t   flags,
-        _In_  uint32_t   permissions,
-        _Out_ void**     dataOut)
+FsOpen(
+        _In_      void*      instanceData,
+        _In_      mstring_t* path,
+        _Out_Opt_ void**     dataOut)
+{
+    FileSystemMFS_t* mfs = instanceData;
+    oserr_t          oserr;
+
+    usched_mtx_lock(&mfs->Lock);
+    oserr = __OpenPath(mfs, path, dataOut);
+    usched_mtx_unlock(&mfs->Lock);
+    return oserr;
+}
+
+static oserr_t
+__CreateEntry(
+        _In_  FileSystemMFS_t* mfs,
+        _In_  MFSEntry_t*      entry,
+        _In_  mstring_t*       name,
+        _In_  uint32_t         owner,
+        _In_  uint32_t         flags,
+        _In_  uint32_t         permissions,
+        _Out_ void**           dataOut)
 {
     oserr_t     osStatus;
-    MFSEntry_t* entry = (MFSEntry_t*)data;
     MFSEntry_t* result;
     TRACE("FsCreate(parent=%ms, name=%ms)", entry ? entry->Name : NULL, name);
 
     osStatus = MfsCreateRecord(
-            instanceData,
+            mfs,
             entry,
             name,
             owner,
@@ -111,16 +132,44 @@ FsCreate(
 }
 
 oserr_t
-FsClose(
-        _In_ void* instanceData,
-        _In_ void* data)
+FsCreate(
+        _In_  void*      instanceData,
+        _In_  void*      data,
+        _In_  mstring_t* name,
+        _In_  uint32_t   owner,
+        _In_  uint32_t   flags,
+        _In_  uint32_t   permissions,
+        _Out_ void**     dataOut)
 {
-    MFSEntry_t* entry    = (MFSEntry_t*)data;
-    oserr_t     osStatus = OS_EOK;
+    FileSystemMFS_t* mfs = instanceData;
+    oserr_t          oserr;
+
+    usched_mtx_lock(&mfs->Lock);
+    oserr = __CreateEntry(
+            mfs,
+            (MFSEntry_t*)data,
+            name,
+            owner,
+            flags,
+            permissions,
+            dataOut
+    );
+    usched_mtx_unlock(&mfs->Lock);
+    return oserr;
+}
+
+// Writes the record of the entry when it changed, and frees the entry. The
+// entry is freed also when the write fails.
+static oserr_t
+__CloseEntry(
+        _In_ FileSystemMFS_t* mfs,
+        _In_ MFSEntry_t*      entry)
+{
+    oserr_t osStatus = OS_EOK;
     TRACE("FsClose(%i)", entry->ActionOnClose);
 
     if (entry->ActionOnClose) {
-        osStatus = MfsUpdateRecord(instanceData, entry, entry->ActionOnClose);
+        osStatus = MfsUpdateRecord(mfs, entry, entry->ActionOnClose);
     }
     mstr_delete(entry->Name);
     free(entry);
@@ -128,12 +177,24 @@ FsClose(
 }
 
 oserr_t
-FsStat(
-        _In_ void*             instanceData,
-        _In_ struct VFSStatFS* stat)
+FsClose(
+        _In_ void* instanceData,
+        _In_ void* data)
 {
     FileSystemMFS_t* mfs = instanceData;
+    oserr_t          oserr;
 
+    usched_mtx_lock(&mfs->Lock);
+    oserr = __CloseEntry(mfs, (MFSEntry_t*)data);
+    usched_mtx_unlock(&mfs->Lock);
+    return oserr;
+}
+
+static oserr_t
+__StatFileSystem(
+        _In_ FileSystemMFS_t*  mfs,
+        _In_ struct VFSStatFS* stat)
+{
     stat->Label = mfs->Label;
     stat->MaxFilenameLength = MFS_FILERECORD_MAX_NAME;
     stat->BlockSize = mfs->SectorSize;
@@ -143,14 +204,30 @@ FsStat(
     return OS_EOK;
 }
 
+// Label is not copied. It stays the same while the filesystem is mounted, so
+// the caller may still read it after the lock is released.
 oserr_t
-FsUnlink(
-        _In_ void*      instanceData,
-        _In_ mstring_t* path)
+FsStat(
+        _In_ void*             instanceData,
+        _In_ struct VFSStatFS* stat)
 {
     FileSystemMFS_t* mfs = instanceData;
     oserr_t          oserr;
-    MFSEntry_t*      mfsEntry;
+
+    usched_mtx_lock(&mfs->Lock);
+    oserr = __StatFileSystem(mfs, stat);
+    usched_mtx_unlock(&mfs->Lock);
+    return oserr;
+}
+
+static oserr_t
+__UnlinkPath(
+        _In_ FileSystemMFS_t* mfs,
+        _In_ mstring_t*       path)
+{
+    oserr_t     oserr;
+    oserr_t     freeStatus;
+    MFSEntry_t* mfsEntry;
     TRACE("FsUnlink(%ms)", path);
 
     oserr = MfsLocateRecord(
@@ -162,19 +239,67 @@ FsUnlink(
         return oserr;
     }
 
-    oserr = MfsFreeBuckets(mfs, mfsEntry->StartBucket, mfsEntry->StartLength);
+    // The record is removed first, and the buckets are freed after it. A
+    // bucket must never be on the free list while a record still points at
+    // it, as the next allocation would give it to a second file.
+    // - If the record write fails, nothing has changed. The file is still
+    //   there with all its data, and the error is returned.
+    // - If freeing the buckets fails, the record is already gone and nothing
+    //   points at the buckets any more. They are lost: their space cannot be
+    //   used again. This is logged, and OS_EOK is returned, because the file
+    //   is removed. filed only drops its node for the file on OS_EOK, and
+    //   would otherwise keep a node for a file that no longer exists.
+    oserr = MfsUpdateRecord(mfs, mfsEntry, MFS_ACTION_DELETE);
     if (oserr != OS_EOK) {
-        ERROR("Failed to free the buckets at start 0x%x, length 0x%x",
-              mfsEntry->StartBucket, mfsEntry->StartLength);
+        ERROR("FsUnlink failed to remove the record of %ms: %u", path, oserr);
         goto cleanup;
     }
 
-    oserr = MfsUpdateRecord(mfs, mfsEntry, MFS_ACTION_DELETE);
+    // A file that was never written has no buckets (StartBucket is
+    // MFS_ENDOFCHAIN), and MfsFreeBuckets refuses a length of 0. Only the
+    // record is removed then.
+    if (mfsEntry->StartBucket != MFS_ENDOFCHAIN) {
+        freeStatus = MfsFreeBuckets(mfs, mfsEntry->StartBucket, mfsEntry->StartLength);
+        if (freeStatus != OS_EOK) {
+            ERROR("FsUnlink removed %ms, but failed to free its buckets at %u (length %u): %u. "
+                  "The buckets are lost",
+                  path, mfsEntry->StartBucket, mfsEntry->StartLength, freeStatus);
+        }
+    }
+
 cleanup:
     MFSEntryDelete(mfsEntry);
     return oserr;
 }
 
+oserr_t
+FsUnlink(
+        _In_ void*      instanceData,
+        _In_ mstring_t* path)
+{
+    FileSystemMFS_t* mfs = instanceData;
+    oserr_t          oserr;
+
+    usched_mtx_lock(&mfs->Lock);
+    oserr = __UnlinkPath(mfs, path);
+    usched_mtx_unlock(&mfs->Lock);
+    return oserr;
+}
+
+static oserr_t
+__CreateLink(
+        _In_ FileSystemMFS_t* mfs,
+        _In_ MFSEntry_t*      entry,
+        _In_ mstring_t*       linkName,
+        _In_ mstring_t*       linkTarget,
+        _In_ int              symbolic)
+{
+    // TODO implement MFS::Link
+    return OS_ENOTSUPPORTED;
+}
+
+// Links are not supported yet. The lock is still taken, so a later
+// implementation that reads the disk is already covered by it.
 oserr_t
 FsLink(
         _In_ void*      instanceData,
@@ -183,18 +308,286 @@ FsLink(
         _In_ mstring_t* linkTarget,
         _In_ int        symbolic)
 {
-    // TODO implement MFS::Link
+    FileSystemMFS_t* mfs = instanceData;
+    oserr_t          oserr;
+
+    usched_mtx_lock(&mfs->Lock);
+    oserr = __CreateLink(mfs, (MFSEntry_t*)data, linkName, linkTarget, symbolic);
+    usched_mtx_unlock(&mfs->Lock);
+    return oserr;
+}
+
+static oserr_t
+__ReadLinkPath(
+        _In_ FileSystemMFS_t* mfs,
+        _In_ mstring_t*       path,
+        _In_ mstring_t**      pathOut)
+{
+    // TODO implement MFS::ReadLink
     return OS_ENOTSUPPORTED;
 }
 
+// Links are not supported yet. The lock is taken for the same reason as in
+// FsLink.
 oserr_t
 FsReadLink(
         _In_ void*       instanceData,
         _In_ mstring_t*  path,
         _In_ mstring_t** pathOut)
 {
-    // TODO implement MFS::ReadLink
-    return OS_ENOTSUPPORTED;
+    FileSystemMFS_t* mfs = instanceData;
+    oserr_t          oserr;
+
+    usched_mtx_lock(&mfs->Lock);
+    oserr = __ReadLinkPath(mfs, path, pathOut);
+    usched_mtx_unlock(&mfs->Lock);
+    return oserr;
+}
+
+// Looks up path and returns whether it exists. entryOut is set when it does.
+// A missing path is OS_EOK with MFS_SEARCH_MISSING. Any other error is a
+// failed disk read (or no memory), and is returned as it is.
+static oserr_t
+__FindPath(
+        _In_  FileSystemMFS_t*      mfs,
+        _In_  mstring_t*            path,
+        _Out_ MFSEntry_t**          entryOut,
+        _Out_ enum MFSSearchResult* searchResultOut)
+{
+    oserr_t oserr;
+
+    *entryOut = NULL;
+    oserr = MfsFindRecord(mfs, &mfs->RootEntry, path, entryOut, searchResultOut);
+    if (oserr != OS_EOK) {
+        ERROR("FsMove failed to look up %ms: %u", path, oserr);
+    }
+    return oserr;
+}
+
+// Sets insideOut when path is directory, or lies inside it. A directory
+// cannot be moved into itself, because nothing would be left pointing at it.
+// The walk goes up one directory at a time and ends at the root, or at a
+// path whose directory name is the path itself.
+static oserr_t
+__PathIsInside(
+        _In_  mstring_t* path,
+        _In_  mstring_t* directory,
+        _Out_ bool*      insideOut)
+{
+    mstring_t* current;
+    mstring_t* parent;
+    bool       done = false;
+
+    *insideOut = false;
+    current = mstr_clone(path);
+    if (current == NULL) {
+        return OS_EOOM;
+    }
+
+    while (!done) {
+        if (mstr_icmp(current, directory) == 0) {
+            *insideOut = true;
+            break;
+        }
+        if (__PathIsRoot(current)) {
+            break;
+        }
+
+        parent = mstr_path_dirname(current);
+        if (parent == NULL) {
+            mstr_delete(current);
+            return OS_EOOM;
+        }
+        done = mstr_icmp(parent, current) == 0;
+        mstr_delete(current);
+        current = parent;
+    }
+    mstr_delete(current);
+    return OS_EOK;
+}
+
+// The source and the target are in the same directory: the source record is
+// renamed in place. This is one write, so after a failure the file still has
+// its old name.
+static oserr_t
+__RenameInPlace(
+        _In_ FileSystemMFS_t* mfs,
+        _In_ MFSEntry_t*      source,
+        _In_ mstring_t*       targetName)
+{
+    mstring_t* sourceName = source->Name;
+    oserr_t    oserr;
+
+    source->Name = targetName;
+    oserr = MfsUpdateRecord(mfs, source, MFS_ACTION_RENAME);
+    source->Name = sourceName;
+    if (oserr != OS_EOK) {
+        ERROR("FsMove failed to rename %ms to %ms: %u", sourceName, targetName, oserr);
+    }
+    return oserr;
+}
+
+// The target is in another directory. A record for the target name is
+// created there first, pointing at the same data as the source. Only once it
+// is written is the source record removed. The steps:
+// 1. Create the target record. Before that write the target directory may
+//    get new buckets (a bucket map, a master record and a zero write each).
+//    If any of those fail, the source is untouched and only allocated
+//    buckets may be lost.
+// 2. Remove the source record. If that fails, the target record is removed
+//    again, so the file keeps its old name. If that write fails as well,
+//    both records point at the same data. That is logged, because removing
+//    one of the two later frees data the other one still uses.
+static oserr_t
+__MoveToDirectory(
+        _In_ FileSystemMFS_t* mfs,
+        _In_ MFSEntry_t*      source,
+        _In_ mstring_t*       to,
+        _In_ mstring_t*       targetName)
+{
+    enum MFSSearchResult searchResult;
+    MFSEntry_t*          directory = NULL;
+    MFSEntry_t*          target = NULL;
+    mstring_t*           directoryPath;
+    oserr_t              oserr;
+    oserr_t              undoStatus;
+
+    directoryPath = mstr_path_dirname(to);
+    if (directoryPath == NULL) {
+        return OS_EOOM;
+    }
+
+    oserr = __FindPath(mfs, directoryPath, &directory, &searchResult);
+    if (oserr != OS_EOK) {
+        goto cleanup;
+    }
+    if (searchResult == MFS_SEARCH_MISSING) {
+        oserr = OS_ENOENT;
+        goto cleanup;
+    }
+    if (!(directory->NativeFlags & MFS_FILERECORD_DIRECTORY)) {
+        oserr = OS_ENOTDIR;
+        goto cleanup;
+    }
+
+    oserr = MfsCreateRecord(
+            mfs,
+            directory,
+            targetName,
+            source->Owner,
+            source->Flags,
+            source->Permissions,
+            source->AllocatedSize,
+            source->ActualSize,
+            source->StartBucket,
+            source->StartLength,
+            &target
+    );
+    if (oserr != OS_EOK) {
+        ERROR("FsMove failed to create the record of %ms: %u", to, oserr);
+        goto cleanup;
+    }
+
+    oserr = MfsUpdateRecord(mfs, source, MFS_ACTION_DELETE);
+    if (oserr != OS_EOK) {
+        ERROR("FsMove failed to remove the record of %ms: %u", source->Name, oserr);
+        undoStatus = MfsUpdateRecord(mfs, target, MFS_ACTION_DELETE);
+        if (undoStatus != OS_EOK) {
+            ERROR("FsMove failed to remove the new record of %ms: %u. %ms and %ms now share their data",
+                  to, undoStatus, source->Name, to);
+        }
+    }
+
+cleanup:
+    MFSEntryDelete(target);
+    MFSEntryDelete(directory);
+    mstr_delete(directoryPath);
+    return oserr;
+}
+
+static oserr_t
+__MovePath(
+        _In_ FileSystemMFS_t* mfs,
+        _In_ mstring_t*       from,
+        _In_ mstring_t*       to,
+        _In_ int              copy)
+{
+    enum MFSSearchResult searchResult;
+    MFSEntry_t*          source = NULL;
+    MFSEntry_t*          existing = NULL;
+    mstring_t*           fromDirectory = NULL;
+    mstring_t*           toDirectory = NULL;
+    mstring_t*           targetName = NULL;
+    bool                 inside;
+    oserr_t              oserr;
+    TRACE("FsMove(from=%ms, to=%ms, copy=%i)", from, to, copy);
+
+    // A copy needs the data copied to new buckets, and MFSCloneBucketData
+    // cannot do that yet. Refuse it before anything is changed.
+    if (copy) {
+        return OS_ENOTSUPPORTED;
+    }
+
+    // The root has no record that could move, and nothing can replace it.
+    if (__PathIsRoot(from)) {
+        return OS_EPERMISSIONS;
+    }
+    if (__PathIsRoot(to)) {
+        return OS_EEXISTS;
+    }
+
+    oserr = __FindPath(mfs, from, &source, &searchResult);
+    if (oserr != OS_EOK) {
+        goto cleanup;
+    }
+    if (searchResult == MFS_SEARCH_MISSING) {
+        oserr = OS_ENOENT;
+        goto cleanup;
+    }
+
+    // Names compare without case, so a target that differs from the source
+    // only in case is found here as the source itself.
+    oserr = __FindPath(mfs, to, &existing, &searchResult);
+    if (oserr != OS_EOK) {
+        goto cleanup;
+    }
+    if (searchResult == MFS_SEARCH_FOUND) {
+        oserr = OS_EEXISTS;
+        goto cleanup;
+    }
+
+    if (source->NativeFlags & MFS_FILERECORD_DIRECTORY) {
+        oserr = __PathIsInside(to, from, &inside);
+        if (oserr != OS_EOK) {
+            goto cleanup;
+        }
+        if (inside) {
+            oserr = OS_EINVALPARAMS;
+            goto cleanup;
+        }
+    }
+
+    fromDirectory = mstr_path_dirname(from);
+    toDirectory   = mstr_path_dirname(to);
+    targetName    = mstr_path_basename(to);
+    if (fromDirectory == NULL || toDirectory == NULL || targetName == NULL) {
+        oserr = OS_EOOM;
+        goto cleanup;
+    }
+
+    if (mstr_icmp(fromDirectory, toDirectory) == 0) {
+        oserr = __RenameInPlace(mfs, source, targetName);
+    } else {
+        oserr = __MoveToDirectory(mfs, source, to, targetName);
+    }
+
+cleanup:
+    MFSEntryDelete(source);
+    MFSEntryDelete(existing);
+    mstr_delete(fromDirectory);
+    mstr_delete(toDirectory);
+    mstr_delete(targetName);
+    return oserr;
 }
 
 oserr_t
@@ -204,110 +597,38 @@ FsMove(
         _In_ mstring_t* to,
         _In_ int        copy)
 {
-
     FileSystemMFS_t* mfs = instanceData;
     oserr_t          oserr;
-    MFSEntry_t*      targetEntry;
-    MFSEntry_t*      newEntry = NULL;
-    MFSEntry_t*      sourceEntry;
-    mstring_t*       fromDirectoryPath;
-    mstring_t*       fromBaseName;
 
-    // If where we are moving it already exists, then lets bail with the
-    // excuse that the record already exists. If the entry does not exist, then
-    // we get a handle on the directory of the target
-    oserr = MfsLocateRecord(
-            mfs,
-            &mfs->RootEntry,
-            to,
-            &targetEntry);
-    if (oserr != OS_ENOENT) {
-        if (oserr == OS_EOK) {
-            oserr = OS_EEXISTS;
-        }
-        return oserr;
-    }
-
-    fromDirectoryPath = mstr_path_dirname(from);
-    fromBaseName = mstr_path_basename(from);
-    if (fromDirectoryPath == NULL || fromBaseName == NULL) {
-        mstr_delete(fromDirectoryPath);
-        mstr_delete(fromBaseName);
-        return OS_EOOM;
-    }
-
-    oserr = MfsLocateRecord(
-            mfs,
-            &mfs->RootEntry,
-            fromDirectoryPath,
-            &targetEntry);
-    if (oserr != OS_EOK) {
-        mstr_delete(fromDirectoryPath);
-        mstr_delete(fromBaseName);
-        return oserr;
-    }
-
-    // Next step is to locate the source record.
-    oserr = MfsLocateRecord(
-            mfs,
-            &mfs->RootEntry,
-            from,
-            &sourceEntry);
-    if (oserr != OS_EOK) {
-        goto cleanup;
-    }
-
-    // Create the new record
-    oserr = MfsCreateRecord(
-            mfs,
-            targetEntry,
-            fromBaseName,
-            sourceEntry->Owner,
-            sourceEntry->Flags,
-            sourceEntry->Permissions,
-            sourceEntry->AllocatedSize,
-            sourceEntry->ActualSize,
-            sourceEntry->StartBucket,
-            sourceEntry->StartLength,
-            &newEntry
-    );
-    if (oserr != OS_EOK) {
-        goto cleanup;
-    }
-
-    if (!copy) {
-        oserr = MfsUpdateRecord(mfs, sourceEntry, MFS_ACTION_DELETE);
-        goto cleanup;
-    }
-
-    // Allocate a new chain and copy the data.
-    newEntry->AllocatedSize = 0;
-    newEntry->ActualSize = 0;
-    newEntry->StartBucket = MFS_ENDOFCHAIN;
-    newEntry->StartLength = 0;
-    oserr = MfsEnsureRecordSpace(mfs, newEntry, sourceEntry->ActualSize);
-    if (oserr != OS_EOK) {
-        (void)MfsUpdateRecord(mfs, newEntry, MFS_ACTION_DELETE);
-        goto cleanup;
-    }
-
-    oserr = MFSCloneBucketData(mfs, sourceEntry->StartBucket, sourceEntry->StartLength, newEntry->StartBucket, newEntry->StartLength);
-    if (oserr != OS_EOK) {
-        (void)MfsUpdateRecord(mfs, newEntry, MFS_ACTION_DELETE);
-        goto cleanup;
-    }
-
-    oserr = MfsUpdateRecord(mfs, newEntry, MFS_ACTION_UPDATE);
-
-cleanup:
-    MFSEntryDelete(targetEntry);
-    MFSEntryDelete(sourceEntry);
-    MFSEntryDelete(newEntry);
-    mstr_delete(fromDirectoryPath);
-    mstr_delete(fromBaseName);
+    usched_mtx_lock(&mfs->Lock);
+    oserr = __MovePath(mfs, from, to, copy);
+    usched_mtx_unlock(&mfs->Lock);
     return oserr;
 }
 
+static oserr_t
+__ReadEntry(
+        _In_  FileSystemMFS_t* mfs,
+        _In_  MFSEntry_t*      entry,
+        _In_  uuid_t           bufferHandle,
+        _In_  void*            buffer,
+        _In_  size_t           bufferOffset,
+        _In_  size_t           unitCount,
+        _Out_ size_t*          unitsRead)
+{
+    TRACE("FsReadEntry(flags 0x%x, length %u)", entry->Flags, unitCount);
+
+    if (entry->Flags & FILE_FLAG_DIRECTORY) {
+        return FsReadFromDirectory(mfs, entry, buffer, bufferOffset, unitCount, unitsRead);
+    }
+    else {
+        return FsReadFromFile(mfs, entry, bufferHandle, buffer, bufferOffset, unitCount, unitsRead);
+    }
+}
+
+// The lock is held also when the data goes straight to the caller's buffer.
+// The read may still use the transfer buffer for the first and last sector,
+// and it follows the bucket map to find the next bucket of the file.
 oserr_t
 FsRead(
         _In_  void*   instanceData,
@@ -318,17 +639,43 @@ FsRead(
         _In_  size_t  unitCount,
         _Out_ size_t* unitsRead)
 {
-    MFSEntry_t* entry = (MFSEntry_t*)data;
-    TRACE("FsReadEntry(flags 0x%x, length %u)", entry->Flags, unitCount);
+    FileSystemMFS_t* mfs = instanceData;
+    oserr_t          oserr;
 
-    if (entry->Flags & FILE_FLAG_DIRECTORY) {
-        return FsReadFromDirectory(instanceData, entry, buffer, bufferOffset, unitCount, unitsRead);
-    }
-    else {
-        return FsReadFromFile(instanceData, entry, bufferHandle, buffer, bufferOffset, unitCount, unitsRead);
-    }
+    usched_mtx_lock(&mfs->Lock);
+    oserr = __ReadEntry(
+            mfs,
+            (MFSEntry_t*)data,
+            bufferHandle,
+            buffer,
+            bufferOffset,
+            unitCount,
+            unitsRead
+    );
+    usched_mtx_unlock(&mfs->Lock);
+    return oserr;
 }
 
+static oserr_t
+__WriteEntry(
+        _In_  FileSystemMFS_t* mfs,
+        _In_  MFSEntry_t*      entry,
+        _In_  uuid_t           bufferHandle,
+        _In_  void*            buffer,
+        _In_  size_t           bufferOffset,
+        _In_  size_t           unitCount,
+        _Out_ size_t*          unitsWritten)
+{
+    TRACE("FsWriteEntry(flags 0x%x, length %u)", entry->Flags, unitCount);
+
+    if (!(entry->Flags & FILE_FLAG_DIRECTORY)) {
+        return FsWriteToFile(mfs, entry, bufferHandle, buffer, bufferOffset, unitCount, unitsWritten);
+    }
+    return OS_EINVALPARAMS;
+}
+
+// The lock is held for the same reasons as in FsRead. A write can also give
+// the file new buckets, which changes the bucket map and the master record.
 oserr_t
 FsWrite(
         _In_  void*   instanceData,
@@ -339,15 +686,45 @@ FsWrite(
         _In_  size_t  unitCount,
         _Out_ size_t* unitsWritten)
 {
-    MFSEntry_t* entry = (MFSEntry_t*)data;
-    TRACE("FsWriteEntry(flags 0x%x, length %u)", entry->Flags, unitCount);
+    FileSystemMFS_t* mfs = instanceData;
+    oserr_t          oserr;
 
-    if (!(entry->Flags & FILE_FLAG_DIRECTORY)) {
-        return FsWriteToFile(instanceData, entry, bufferHandle, buffer, bufferOffset, unitCount, unitsWritten);
-    }
-    return OS_EINVALPARAMS;
+    usched_mtx_lock(&mfs->Lock);
+    oserr = __WriteEntry(
+            mfs,
+            (MFSEntry_t*)data,
+            bufferHandle,
+            buffer,
+            bufferOffset,
+            unitCount,
+            unitsWritten
+    );
+    usched_mtx_unlock(&mfs->Lock);
+    return oserr;
 }
 
+static oserr_t
+__SeekEntry(
+        _In_  FileSystemMFS_t* mfs,
+        _In_  MFSEntry_t*      entry,
+        _In_  uint64_t         absolutePosition,
+        _Out_ uint64_t*        absolutePositionOut)
+{
+    oserr_t osStatus;
+
+    if (entry->Flags & FILE_FLAG_DIRECTORY) {
+        osStatus = FsSeekInDirectory(mfs, entry, absolutePosition);
+    } else {
+        osStatus = FsSeekInFile(mfs, entry, absolutePosition);
+    }
+    if (osStatus == OS_EOK) {
+        *absolutePositionOut = entry->Position;
+    }
+    return osStatus;
+}
+
+// A seek reads the bucket map in memory, which a create or a write on another
+// handle may be changing.
 oserr_t
 FsSeek(
         _In_  void*     instanceData,
@@ -355,18 +732,28 @@ FsSeek(
         _In_  uint64_t  absolutePosition,
         _Out_ uint64_t* absolutePositionOut)
 {
-    MFSEntry_t* entry = (MFSEntry_t*)data;
-    oserr_t     osStatus;
+    FileSystemMFS_t* mfs = instanceData;
+    oserr_t          oserr;
 
-    if (entry->Flags & FILE_FLAG_DIRECTORY) {
-        osStatus = FsSeekInDirectory(instanceData, entry, absolutePosition);
-    } else {
-        osStatus = FsSeekInFile(instanceData, entry, absolutePosition);
-    }
-    if (osStatus == OS_EOK) {
-        *absolutePositionOut = entry->Position;
-    }
-    return osStatus;
+    usched_mtx_lock(&mfs->Lock);
+    oserr = __SeekEntry(mfs, (MFSEntry_t*)data, absolutePosition, absolutePositionOut);
+    usched_mtx_unlock(&mfs->Lock);
+    return oserr;
+}
+
+oserr_t
+FsTruncate(
+        _In_ void*    instanceData,
+        _In_ void*    data,
+        _In_ uint64_t size)
+{
+    FileSystemMFS_t* mfs = instanceData;
+    oserr_t          oserr;
+
+    usched_mtx_lock(&mfs->Lock);
+    oserr = FsChangeFileSize(mfs, (MFSEntry_t*)data, size);
+    usched_mtx_unlock(&mfs->Lock);
+    return oserr;
 }
 
 static FileSystemMFS_t*
@@ -382,6 +769,7 @@ __FileSystemMFSNew(
         return NULL;
     }
     memset(mfs, 0, sizeof(FileSystemMFS_t));
+    usched_mtx_init(&mfs->Lock, USCHED_MUTEX_PLAIN);
 
     // Store the disk geometry used to calculate transfer offsets and sizes.
     memcpy(&mfs->Storage, storageParameters, sizeof(struct VFSStorageParameters));
@@ -403,10 +791,16 @@ __FileSystemMFSNew(
     return mfs;
 }
 
+// Frees the mount and everything it holds. FsInitialize calls this when it
+// fails part way, so Label, RootEntry.Name and BucketMap may still be NULL.
+// __FileSystemMFSNew cleared the structure, and mstr_delete and free do
+// nothing for NULL.
 static void __FileSystemMFSDelete(
         _In_ FileSystemMFS_t* mfs)
 {
     OSHandleDestroy(&mfs->TransferBuffer);
+    mstr_delete(mfs->Label);
+    mstr_delete(mfs->RootEntry.Name);
     free(mfs->BucketMap);
     free(mfs);
 }
@@ -477,6 +871,10 @@ __ParseAndProcessMasterRecord(
 
     TRACE("Partition-name: %s", &mfs->MasterRecord.PartitionName[0]);
     mfs->Label = mstr_new_u8((const char*)&mfs->MasterRecord.PartitionName[0]);
+    if (mfs->Label == NULL) {
+        ERROR("__ParseAndProcessMasterRecord failed to allocate the partition label");
+        return OS_EOOM;
+    }
 
     // Parse the master record
     TRACE("Partition flags: 0x%x", mfs->MasterRecord.Flags);
@@ -572,11 +970,15 @@ __ParseAndProcessMasterRecord(
     return OS_EOK;
 }
 
-static void __InitializeRootEntry(
+static oserr_t __InitializeRootEntry(
         _In_ FileSystemMFS_t* mfs)
 {
     // __FileSystemMFSNew clears the structure. Set the nonzero defaults here.
     mfs->RootEntry.Name = mstr_new_u8(RootEntryName);
+    if (mfs->RootEntry.Name == NULL) {
+        ERROR("__InitializeRootEntry failed to allocate the name of the root");
+        return OS_EOOM;
+    }
     mfs->RootEntry.Owner = UUID_INVALID;
     mfs->RootEntry.Permissions = FILE_PERMISSION_READ | FILE_PERMISSION_OWNER_WRITE;
     mfs->RootEntry.Flags = FILE_FLAG_DIRECTORY;
@@ -584,8 +986,8 @@ static void __InitializeRootEntry(
     mfs->RootEntry.StartBucket = mfs->MasterRecord.RootIndex;
     mfs->RootEntry.StartLength = MFS_ROOTSIZE;
     mfs->RootEntry.DirectoryBucket = MFS_ENDOFCHAIN;
-    mfs->RootEntry.DataBucketPosition = mfs->MasterRecord.RootIndex;
-    mfs->RootEntry.DataBucketLength = MFS_ROOTSIZE;
+    MFSEntryResetPosition(&mfs->RootEntry);
+    return OS_EOK;
 }
 
 oserr_t
@@ -670,7 +1072,11 @@ FsInitialize(
         goto error_exit;
     }
 
-    __InitializeRootEntry(mfs);
+    oserr = __InitializeRootEntry(mfs);
+    if (oserr != OS_EOK) {
+        ERROR("FsInitialize failed to set up the root directory");
+        goto error_exit;
+    }
     *instanceData = mfs;
     return OS_EOK;
 
@@ -679,6 +1085,16 @@ error_exit:
     return oserr;
 }
 
+// filed only destroys a mount after every operation on it has ended.
+// VFSDestroy (services/filed/vfs/vfs.c) stops new operations and waits for the
+// running ones before the driver's Destroy is sent. So the lock is normally
+// free here. If it is not, an operation is still running and would use the
+// mount after it was freed. The mount is then kept and OS_EBUSY returned.
+// filed logs the error and forgets the mount, so its memory is lost, but
+// nothing is freed while it is in use.
+// trylock does not wait, so no other job can be queued on the lock when it
+// succeeds. The lock is released again before the free, and this job does not
+// give way to other jobs between the two, so nobody can take it in between.
 oserr_t
 FsDestroy(
         _In_ void*         instanceData,
@@ -689,12 +1105,18 @@ FsDestroy(
         return OS_EINVALPARAMS;
     }
 
+    if (usched_mtx_trylock(&fileSystem->Lock) != 0) {
+        ERROR("FsDestroy an operation is still running on the filesystem, it is not freed");
+        return OS_EBUSY;
+    }
+
     // Which kind of unmount is it?
     if (!(unmountFlags & 0x1)) {
         // Flush everything
         // @todo
     }
 
+    usched_mtx_unlock(&fileSystem->Lock);
     __FileSystemMFSDelete(fileSystem);
     return OS_EOK;
 }

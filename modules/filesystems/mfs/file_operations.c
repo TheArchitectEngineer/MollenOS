@@ -23,6 +23,207 @@
 #include <string.h>
 #include "mfs.h"
 
+oserr_t FsSeekInFile(FileSystemMFS_t*, MFSEntry_t*, uint64_t);
+
+// Returns whether the data bucket of entry holds the byte at position.
+static bool
+__BucketHoldsPosition(
+        _In_ FileSystemMFS_t* mfs,
+        _In_ MFSEntry_t*      entry,
+        _In_ uint64_t         position)
+{
+    size_t bucketSizeBytes = mfs->SectorsPerBucket * mfs->SectorSize;
+
+    if (entry->DataBucketPosition == MFS_ENDOFCHAIN) {
+        return false;
+    }
+    return position >= entry->BucketByteBoundary &&
+           position < (entry->BucketByteBoundary + (entry->DataBucketLength * bucketSizeBytes));
+}
+
+// Makes the data bucket of entry the bucket that holds position. The read and
+// write loops take the sector from the data bucket, and only step to the next
+// bucket when the position is exactly at the end of the current one. The data
+// bucket does not hold the position when:
+// - The file had no buckets when it was created or opened, at its last seek,
+//   or after a truncate to 0. The data bucket is then MFS_ENDOFCHAIN.
+// - FsSeekInFile went past the last bucket of the file. It stops at that
+//   bucket, and the position lies past its end. A write or a truncate may
+//   since have given the file the bucket of the position.
+// - The position is at the end of the data bucket.
+// The seek is then done again, which walks the bucket map from the first
+// bucket of the file. The caller makes sure the file has a bucket for the
+// position: a read checks the size of the file, and a write calls
+// MfsEnsureRecordSpace first. If the seek still finds no bucket, the entry and
+// the bucket map do not agree. OS_EDEVFAULT is returned then, so nothing is
+// read or written outside the file.
+static oserr_t
+__SeekToBucketOfPosition(
+        _In_ FileSystemMFS_t* mfs,
+        _In_ MFSEntry_t*      entry,
+        _In_ uint64_t         position)
+{
+    oserr_t oserr;
+
+    if (__BucketHoldsPosition(mfs, entry, position)) {
+        return OS_EOK;
+    }
+
+    oserr = FsSeekInFile(mfs, entry, position);
+    if (oserr != OS_EOK) {
+        ERROR("__SeekToBucketOfPosition failed to seek to %u in %ms: %u", LODWORD(position), entry->Name, oserr);
+        return oserr;
+    }
+
+    if (!__BucketHoldsPosition(mfs, entry, position)) {
+        ERROR("__SeekToBucketOfPosition position %u lies past the buckets of %ms", LODWORD(position), entry->Name);
+        return OS_EDEVFAULT;
+    }
+    return OS_EOK;
+}
+
+// Writes zeros from position up to end, but only within the data bucket of
+// cursor, and returns the number of bytes cleared in bytesZeroedOut. A sector
+// that also holds bytes before position or after end is read first, and only
+// the bytes of the range are cleared in it. Whole sectors are written from a
+// cleared transfer buffer, as many at a time as the bucket and the transfer
+// buffer allow.
+static oserr_t
+__ZeroInBucket(
+        _In_  FileSystemMFS_t* mfs,
+        _In_  MFSEntry_t*      cursor,
+        _In_  uint64_t         position,
+        _In_  uint64_t         end,
+        _Out_ size_t*          bytesZeroedOut)
+{
+    uint8_t* transferBuffer = (uint8_t*)SHMBuffer(&mfs->TransferBuffer);
+    size_t   bufferSectors  = SHMBufferLength(&mfs->TransferBuffer) / mfs->SectorSize;
+    size_t   sectorOffset   = (size_t)((position - cursor->BucketByteBoundary) % mfs->SectorSize);
+    size_t   sectorIndex    = (size_t)((position - cursor->BucketByteBoundary) / mfs->SectorSize);
+    size_t   sectorsLeft    = MFS_SECTORCOUNT(mfs, cursor->DataBucketLength) - sectorIndex;
+    uint64_t sector         = MFS_GETSECTOR(mfs, cursor->DataBucketPosition) + sectorIndex;
+    size_t   sectorCount;
+    size_t   byteCount;
+    size_t   sectorsTransferred;
+    oserr_t  oserr;
+
+    // The caller steps to the next bucket at the end of this one. A position
+    // past the end would write outside the bucket, and one at the end would
+    // clear nothing and never finish.
+    if (sectorIndex >= MFS_SECTORCOUNT(mfs, cursor->DataBucketLength)) {
+        ERROR("__ZeroInBucket position %u is not inside bucket %u", LODWORD(position), cursor->DataBucketPosition);
+        return OS_EDEVFAULT;
+    }
+
+    if (sectorOffset != 0 || (end - position) < mfs->SectorSize) {
+        sectorCount = 1;
+        byteCount   = (size_t)MIN(end - position, (uint64_t)(mfs->SectorSize - sectorOffset));
+        oserr = FSStorageRead(
+                &mfs->Storage,
+                mfs->TransferBuffer.ID,
+                0,
+                &(UInteger64_t) { .QuadPart = sector },
+                sectorCount,
+                &sectorsTransferred
+        );
+        if (oserr != OS_EOK) {
+            ERROR("__ZeroInBucket failed to read sector %u: %u", LODWORD(sector), oserr);
+            return oserr;
+        }
+        memset(transferBuffer + sectorOffset, 0, byteCount);
+    } else {
+        sectorCount = (size_t)((end - position) / mfs->SectorSize);
+        sectorCount = MIN(sectorCount, sectorsLeft);
+        sectorCount = MIN(sectorCount, bufferSectors);
+        byteCount   = sectorCount * mfs->SectorSize;
+        memset(transferBuffer, 0, byteCount);
+    }
+
+    oserr = FSStorageWrite(
+            &mfs->Storage,
+            mfs->TransferBuffer.ID,
+            0,
+            &(UInteger64_t) { .QuadPart = sector },
+            sectorCount,
+            &sectorsTransferred
+    );
+    if (oserr != OS_EOK) {
+        ERROR("__ZeroInBucket failed to write %u sectors at sector %u: %u",
+              LODWORD(sectorCount), LODWORD(sector), oserr);
+        return oserr;
+    }
+    if (sectorsTransferred != sectorCount) {
+        ERROR("__ZeroInBucket wrote %u of %u sectors at sector %u",
+              LODWORD(sectorsTransferred), LODWORD(sectorCount), LODWORD(sector));
+        return OS_EINCOMPLETE;
+    }
+
+    *bytesZeroedOut = byteCount;
+    return OS_EOK;
+}
+
+// Writes zeros to the bytes of the file from start up to end.
+//
+// The rule: every byte below the size of the file (ActualSize) holds data
+// that was written to the file, or zero. FsReadFromFile stops at the size, so
+// the bytes past it are never returned. They may still hold data of a file
+// that used the buckets before: new buckets are not cleared when they are
+// allocated, and a write of part of a sector leaves the rest of the sector as
+// it was. So when the size grows past bytes that were not written, those
+// bytes are cleared here first:
+// - FsWriteToFile, for a write that starts past the size. The range is from
+//   the size to the start of the write.
+// - FsChangeFileSize, when it makes the file larger. The range is from the
+//   old size to the new size.
+// Clearing only these ranges costs nothing for a write at the end of the
+// file, which is the common case. Clearing every new bucket would write each
+// appended byte twice.
+//
+// The caller has made sure the file has buckets up to end. A copy of the entry
+// walks through the file, so the position and the data bucket of the handle
+// do not change.
+static oserr_t
+__ZeroFileRange(
+        _In_ FileSystemMFS_t* mfs,
+        _In_ MFSEntry_t*      entry,
+        _In_ uint64_t         start,
+        _In_ uint64_t         end)
+{
+    size_t     bucketSizeBytes = mfs->SectorsPerBucket * mfs->SectorSize;
+    uint64_t   position = start;
+    MFSEntry_t cursor;
+    size_t     bytesZeroed;
+    oserr_t    oserr;
+
+    TRACE("__ZeroFileRange(name=%ms, start=%u, end=%u)", entry->Name, LODWORD(start), LODWORD(end));
+
+    memcpy(&cursor, entry, sizeof(MFSEntry_t));
+    oserr = __SeekToBucketOfPosition(mfs, &cursor, start);
+    if (oserr != OS_EOK) {
+        ERROR("__ZeroFileRange failed to find the bucket of position %u: %u", LODWORD(start), oserr);
+        return oserr;
+    }
+
+    while (position < end) {
+        // Step to the next run of buckets at the end of the current one
+        if (position == (cursor.BucketByteBoundary + (cursor.DataBucketLength * bucketSizeBytes))) {
+            oserr = MFSAdvanceToNextBucket(mfs, &cursor);
+            if (oserr != OS_EOK) {
+                ERROR("__ZeroFileRange failed to get the bucket after %u: %u", cursor.DataBucketPosition, oserr);
+                return oserr;
+            }
+        }
+
+        oserr = __ZeroInBucket(mfs, &cursor, position, end, &bytesZeroed);
+        if (oserr != OS_EOK) {
+            ERROR("__ZeroFileRange failed to clear position %u of %ms: %u", LODWORD(position), entry->Name, oserr);
+            return oserr;
+        }
+        position += bytesZeroed;
+    }
+    return OS_EOK;
+}
+
 oserr_t
 FsReadFromFile(
         _In_  FileSystemMFS_t* mfs,
@@ -61,6 +262,15 @@ FsReadFromFile(
             // Read from integrated data
             // TODO
         }
+    }
+
+    // The position is below the size of the file here, so the file has a
+    // bucket for it. The data bucket of the handle may still be behind, for
+    // example after a truncate gave a file without buckets its first ones.
+    oserr = __SeekToBucketOfPosition(mfs, entry, position);
+    if (oserr != OS_EOK) {
+        ERROR("FsReadFromFile failed to find the bucket of position %u: %u", LODWORD(position), oserr);
+        return oserr;
     }
 
     // Read the current sector, update index to where data starts
@@ -216,14 +426,30 @@ FsWriteToFile(
         return oserr;
     }
 
-    // Guard against newly allocated files
-    if (entry->DataBucketPosition == MFS_ENDOFCHAIN) {
-        TRACE("FsWriteToFile: initializing new record");
-        entry->DataBucketPosition = entry->StartBucket;
-        entry->DataBucketLength   = entry->StartLength;
-        entry->BucketByteBoundary = 0;
+    // A write that starts past the end of the file leaves the bytes between
+    // the end and the position unwritten. They are cleared before the size
+    // grows over them (see __ZeroFileRange).
+    if (position > entry->ActualSize) {
+        oserr = __ZeroFileRange(mfs, entry, entry->ActualSize, position);
+        if (oserr != OS_EOK) {
+            ERROR("FsWriteToFile: failed to clear the bytes from %u to %u: %u",
+                  LODWORD(entry->ActualSize), LODWORD(position), oserr);
+            return oserr;
+        }
     }
-    
+
+    // MfsEnsureRecordSpace may just have given the file the bucket of the
+    // position, while the data bucket of the handle is MFS_ENDOFCHAIN or the
+    // last bucket a seek past the end stopped at (see
+    // __SeekToBucketOfPosition). A write of 0 bytes needs no bucket.
+    if (bytesToWrite != 0) {
+        oserr = __SeekToBucketOfPosition(mfs, entry, position);
+        if (oserr != OS_EOK) {
+            ERROR("FsWriteToFile: failed to find the bucket of position %u: %u", LODWORD(position), oserr);
+            return oserr;
+        }
+    }
+
     // Write in a loop to make sure we write all requested bytes
     while (bytesToWrite) {
         // Determine whether we need to switch bucket as the first step of writing. Do
@@ -383,6 +609,23 @@ FsSeekInFile(
 
     TRACE("FsSeekInFile(name=%ms, position=0x%x)", entry->Name, LODWORD(absolutePosition));
 
+    // A file without buckets (StartBucket is MFS_ENDOFCHAIN) has no bucket the
+    // position can point into. Any position is accepted and stored, also one
+    // past 0, and the data bucket is set to MFS_ENDOFCHAIN:
+    // - FsReadFromFile returns 0 bytes, as the position is at or past the end
+    //   of the file.
+    // - FsWriteToFile has MfsEnsureRecordSpace allocate buckets up to the
+    //   position plus the bytes to write. It sees the MFS_ENDOFCHAIN data
+    //   bucket and seeks again, which then finds the bucket of the position.
+    //   The bytes before the position are cleared (see __ZeroFileRange).
+    if (entry->StartBucket == MFS_ENDOFCHAIN) {
+        entry->DataBucketPosition = MFS_ENDOFCHAIN;
+        entry->DataBucketLength   = 0;
+        entry->BucketByteBoundary = 0;
+        entry->Position           = absolutePosition;
+        return OS_EOK;
+    }
+
     // Step 1, if the new position is in
     // initial bucket, we need to do no actual seeking
     initialBucketMax = (entry->StartLength * (mfs->SectorsPerBucket * mfs->SectorSize));
@@ -464,42 +707,99 @@ FsSeekInFile(
     return OS_EOK;
 }
 
-oserr_t
-FsTruncate(
-        _In_ void*    instanceData,
-        _In_ void*    data,
-        _In_ uint64_t size)
+// Sets the size of the file to 0 and gives its buckets back to the free list.
+// The record is written first, and the buckets are freed after it, as in
+// FsUnlink. A bucket must never be on the free list while a record still
+// points at it.
+// - If the record write fails, entry gets its old values back. The file keeps
+//   its buckets and its size, on the disk and in the handle, and the error is
+//   returned.
+// - If freeing the buckets fails, the record no longer points at them. They
+//   are lost (their space cannot be used again). This is logged, and OS_EOK
+//   is returned, as the file is empty as asked.
+// The position of the handle does not change. filed keeps its own copy of it
+// and does not seek before each write. The data bucket becomes
+// MFS_ENDOFCHAIN, so the handle never points at the freed buckets. The next
+// write gives the file new buckets and finds the bucket of the position in
+// them, and the bytes before the position read as zero.
+static oserr_t
+__TruncateToZero(
+        _In_ FileSystemMFS_t* mfs,
+        _In_ MFSEntry_t*      entry)
 {
-    FileSystemMFS_t* mfs = instanceData;
-    MFSEntry_t*      entry    = (MFSEntry_t*)data;
-    oserr_t          osStatus = OS_EOK;
+    MFSEntry_t previous;
+    oserr_t    oserr;
+
+    memcpy(&previous, entry, sizeof(MFSEntry_t));
+    entry->AllocatedSize = 0;
+    entry->ActualSize    = 0;
+    entry->StartBucket   = MFS_ENDOFCHAIN;
+    entry->StartLength   = 0;
+
+    oserr = MfsUpdateRecord(mfs, entry, MFS_ACTION_UPDATE);
+    if (oserr != OS_EOK) {
+        ERROR("FsChangeFileSize failed to write the record of %ms with size 0: %u", entry->Name, oserr);
+        memcpy(entry, &previous, sizeof(MFSEntry_t));
+        return oserr;
+    }
+
+    entry->DataBucketPosition = MFS_ENDOFCHAIN;
+    entry->DataBucketLength   = 0;
+    entry->BucketByteBoundary = 0;
+    entry->ActionOnClose      = MFS_ACTION_UPDATE;
+
+    // A file that was never written has no buckets to free
+    if (previous.StartBucket == MFS_ENDOFCHAIN) {
+        return OS_EOK;
+    }
+
+    oserr = MfsFreeBuckets(mfs, previous.StartBucket, previous.StartLength);
+    if (oserr != OS_EOK) {
+        ERROR("FsChangeFileSize emptied %ms, but failed to free its buckets at %u (length %u): %u. "
+              "The buckets are lost",
+              entry->Name, previous.StartBucket, previous.StartLength, oserr);
+    }
+    return OS_EOK;
+}
+
+// Called by FsTruncate in main.c, which holds mfs->Lock.
+// A size of 0 frees every bucket (see __TruncateToZero). Any other size keeps
+// every bucket of the file: MfsEnsureRecordSpace only adds buckets, so after
+// a truncate to a smaller size the data bucket of the handle still points
+// into the file. The bytes past the new size stay on the disk, and are
+// cleared if the file grows over them again.
+oserr_t
+FsChangeFileSize(
+        _In_ FileSystemMFS_t* mfs,
+        _In_ MFSEntry_t*      entry,
+        _In_ uint64_t         size)
+{
+    oserr_t oserr;
     TRACE("FsChangeFileSize(Name %ms, Size 0x%x)", entry->Name, LODWORD(size));
 
-    // Handle a special case of 0
     if (size == 0) {
-        // Free all buckets allocated, if any are allocated
-        if (entry->StartBucket != MFS_ENDOFCHAIN) {
-            oserr_t Status = MfsFreeBuckets(mfs, entry->StartBucket, entry->StartLength);
-            if (Status != OS_EOK) {
-                ERROR("Failed to free the buckets at start 0x%x, length 0x%x. when truncating",
-                      entry->StartBucket, entry->StartLength);
-                osStatus = OS_EDEVFAULT;
-            }
-        }
-
-        if (osStatus == OS_EOK) {
-            entry->AllocatedSize = 0;
-            entry->StartBucket   = MFS_ENDOFCHAIN;
-            entry->StartLength   = 0;
-        }
-    } else {
-        osStatus = MfsEnsureRecordSpace(mfs, entry, size);
+        return __TruncateToZero(mfs, entry);
     }
 
-    if (osStatus == OS_EOK) {
-        // entry->modified = now
-        entry->ActualSize    = size;
-        entry->ActionOnClose = MFS_ACTION_UPDATE;
+    oserr = MfsEnsureRecordSpace(mfs, entry, size);
+    if (oserr != OS_EOK) {
+        ERROR("FsChangeFileSize failed to get buckets for size %u of %ms: %u", LODWORD(size), entry->Name, oserr);
+        return oserr;
     }
-    return osStatus;
+
+    // The bytes the file grows by were never written. They are cleared before
+    // the size covers them (see __ZeroFileRange).
+    if (size > entry->ActualSize) {
+        oserr = __ZeroFileRange(mfs, entry, entry->ActualSize, size);
+        if (oserr != OS_EOK) {
+            ERROR("FsChangeFileSize failed to clear the bytes from %u to %u of %ms: %u",
+                  LODWORD(entry->ActualSize), LODWORD(size), entry->Name, oserr);
+            return oserr;
+        }
+    }
+
+    // entry->modified = now
+    entry->ActualSize    = size;
+    entry->ActionOnClose = MFS_ACTION_UPDATE;
+    return OS_EOK;
 }

@@ -88,6 +88,22 @@ MfsFileRecordToVfsFile(
     // VfsEntry->Base.DescriptorAccessedAt;
 }
 
+void
+MFSEntryResetPosition(
+        _In_ MFSEntry_t* entry)
+{
+    entry->Position           = 0;
+    entry->BucketByteBoundary = 0;
+    entry->DataBucketPosition = entry->StartBucket;
+    entry->DataBucketLength   = entry->StartLength;
+
+    // A record without buckets may still carry a length. The data bucket
+    // length is 0 then, as there is nothing to read or write.
+    if (entry->StartBucket == MFS_ENDOFCHAIN) {
+        entry->DataBucketLength = 0;
+    }
+}
+
 oserr_t
 MfsUpdateRecord(
         _In_ FileSystemMFS_t* mfs,
@@ -120,6 +136,26 @@ MfsUpdateRecord(
     // we zero out the entry and set the status to deleted
     if (action == MFS_ACTION_DELETE) {
         memset((void*)record, 0, sizeof(FileRecord_t));
+    } else if (action == MFS_ACTION_RENAME) {
+        // Only the name changes. The data, the sizes and the integrated data
+        // stay, so a rename is this one write.
+        char*  entryName = mstr_u8(entry->Name);
+        size_t nameLength;
+
+        if (entryName == NULL) {
+            return OS_EOOM;
+        }
+
+        // The name is stored zero terminated.
+        nameLength = strlen(entryName);
+        if (nameLength >= sizeof(record->Name)) {
+            ERROR("MfsUpdateEntry name %ms is too long for a record", entry->Name);
+            free(entryName);
+            return OS_EINVALPARAMS;
+        }
+        memset(&record->Name[0], 0, sizeof(record->Name));
+        memcpy(&record->Name[0], entryName, nameLength);
+        free(entryName);
     } else {
         // Now we have two sub cases, but create just needs some
         // extra updates otherwise they share
