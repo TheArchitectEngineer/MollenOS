@@ -103,7 +103,7 @@ OSGetFullPath(
         _In_ char*       buffer,
         _In_ size_t      maxLength)
 {
-    struct vali_link_message msg = VALI_MSG_INIT_HANDLE(GetFileService());
+    struct vali_link_message msg = VALI_MSG_INIT_HANDLE(ServiceGetFile());
     oserr_t                  status;
 
     if (path == NULL || buffer == NULL || maxLength == 0) {

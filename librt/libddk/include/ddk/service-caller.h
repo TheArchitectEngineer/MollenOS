@@ -14,10 +14,12 @@
  * You should have received a copy of the GNU General Public License
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  *
+ * Check of the caller of a service request. Kept apart from ddk/service.h,
+ * because it needs the gracht types and that header must work without them.
  */
 
-#ifndef __DDK_INTERNAL_SERVICE_H__
-#define __DDK_INTERNAL_SERVICE_H__
+#ifndef __DDK_SERVICE_CALLER_H__
+#define __DDK_SERVICE_CALLER_H__
 
 #include <gracht/types.h>
 #include <os/osdefs.h>
@@ -29,7 +31,7 @@
  * @return True for a nonzero kernel-authenticated principal.
  */
 static inline bool
-__IsAuthenticatedCaller(
+ServiceIsAuthenticatedCaller(
     _In_ const struct gracht_security_context* caller)
 {
     return caller != NULL &&
@@ -37,4 +39,4 @@ __IsAuthenticatedCaller(
            caller->principal != 0;
 }
 
-#endif //!__DDK_INTERNAL_SERVICE_H__
+#endif //!__DDK_SERVICE_CALLER_H__

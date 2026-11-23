@@ -725,7 +725,7 @@ PmAuthorizeSpawn(
         return OS_EOK;
     }
     
-    if (!__IsAuthenticatedCaller(caller)) {
+    if (!ServiceIsAuthenticatedCaller(caller)) {
         WARNING("PmAuthorizeSpawn rejected privileged spawn without authenticated credentials");
         return OS_EPERMISSIONS;
     }

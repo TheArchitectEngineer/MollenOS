@@ -28,7 +28,7 @@ DeviceRegister(
     _In_ Device_t*    device,
     _In_ unsigned int flags)
 {
-    struct vali_link_message msg = VALI_MSG_INIT_HANDLE(GetDeviceService());
+    struct vali_link_message msg = VALI_MSG_INIT_HANDLE(ServiceGetDevice());
     struct sys_device        sysDevice;
     oserr_t                  oserr;
     uuid_t                   id;
@@ -75,7 +75,7 @@ oserr_t
 DeviceUnregister(
     _In_ uuid_t deviceId)
 {
-    struct vali_link_message msg = VALI_MSG_INIT_HANDLE(GetDeviceService());
+    struct vali_link_message msg = VALI_MSG_INIT_HANDLE(ServiceGetDevice());
     oserr_t                  oserr = OS_EPROTOCOL;
     int                      status;
 
@@ -111,7 +111,7 @@ DeviceIoctlEx(
     _InOut_ size_t*      value,
     _In_    size_t       width)
 {
-    struct vali_link_message msg = VALI_MSG_INIT_HANDLE(GetDeviceService());
+    struct vali_link_message msg = VALI_MSG_INIT_HANDLE(ServiceGetDevice());
     oserr_t                  oserr = OS_EPROTOCOL;
     size_t                   decoded;
     int                      status;

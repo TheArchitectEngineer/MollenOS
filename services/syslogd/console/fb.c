@@ -107,7 +107,7 @@ ScreenCreateFB(
     }
     memset(fb, 0, sizeof(struct OutputFB));
 
-    fb->Framebuffer = CreateDisplayFramebuffer();
+    fb->Framebuffer = BootVideoMapFramebuffer();
     if (fb == NULL) {
         free(bb);
         free(fb);

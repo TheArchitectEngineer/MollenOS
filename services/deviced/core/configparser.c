@@ -57,6 +57,19 @@
  *     base: 0xE0000000
  *     length: 0x1000
  *
+ *   controller-compatibles:
+ *   - raspberrypi,firmware-gpio
+ *   - raspberrypi,firmware-clocks
+ *
+ *   clock-routes:
+ *   - compatible: brcm,bcm2711-cprman
+ *     clock: 51
+ *     controller-clock: 12
+ *
+ * The two controller keys are used only when the driver enables its device as
+ * a GPIO or clock controller. A clock route needs all three keys exactly once.
+ * Its numbers must parse in full. At most DRIVER_MAX_CONTROLLER_COMPATIBLES
+ * controller compatibles and DRIVER_MAX_CLOCK_ROUTES routes are accepted.
  */
 enum state {
     STATE_START,    // Before the stream starts.
@@ -81,6 +94,15 @@ enum state {
     STATE_RESOURCEBASE,   // Resource base address value.
     STATE_RESOURCELENGTH, // Resource length value.
 
+    STATE_CONTROLLERCOMPATIBLES_LIST, // Start of the controller compatibles sequence.
+    STATE_CONTROLLERCOMPATIBLES,      // Controller compatible strings.
+
+    STATE_CLOCKROUTES,               // Sequence of clock route mappings.
+    STATE_CLOCKROUTE,                // Keys within a clock route mapping.
+    STATE_CLOCKROUTE_COMPATIBLE,     // Compatible string of the route.
+    STATE_CLOCKROUTE_CLOCK,          // Clock cell consumers use.
+    STATE_CLOCKROUTE_CONTROLLERCLOCK, // Clock number of the driver.
+
     STATE_COMPATIBLES_LIST,
     STATE_COMPATIBLES,
 
@@ -90,16 +112,32 @@ enum state {
     STATE_STOP
 };
 
+// Keys of one clock route, recorded in __ParserState.RouteKeys.
+#define __ROUTE_KEY_COMPATIBLE       0x1U
+#define __ROUTE_KEY_CLOCK            0x2U
+#define __ROUTE_KEY_CONTROLLER_CLOCK 0x4U
+#define __ROUTE_KEYS_ALL             (__ROUTE_KEY_COMPATIBLE | __ROUTE_KEY_CLOCK | __ROUTE_KEY_CONTROLLER_CLOCK)
+
+// Controller keys of the driver mapping, recorded in __ParserState.ControllerKeys.
+#define __CONTROLLER_KEY_COMPATIBLES  0x1U
+#define __CONTROLLER_KEY_CLOCK_ROUTES 0x2U
+
 /**
  * @brief YAML parsing position and the configuration being assembled.
  * Vendor and Resource point to entries under construction. Completed entries
- * are added to Driver's lists when their YAML mappings end.
+ * are added to Driver's lists when their YAML mappings end. A clock route is
+ * built in Driver.ClockRoutes[Driver.ClockRouteCount], and the count grows
+ * when its mapping ends. RouteKeys holds the __ROUTE_KEY_* bits of the keys
+ * the route under construction has. ControllerKeys holds the __CONTROLLER_KEY_*
+ * bits of the controller keys seen, so a second one is refused.
  */
 struct __ParserState {
     enum state                 State;
     struct DriverConfiguration Driver;
     struct DriverVendor*       Vendor;
     struct DriverResource*     Resource;
+    uint32_t                   RouteKeys;
+    uint32_t                   ControllerKeys;
 };
 
 static oserr_t
@@ -156,6 +194,70 @@ __AddCompatible(
     }
 
     list_append(&state->Driver.Compatibles, &compatible->ListHeader);
+    return 0;
+}
+
+static int
+__ParseRouteNumber(
+    _In_  const char* value,
+    _Out_ uint32_t*   number)
+{
+    unsigned long long result;
+    char*              end;
+
+    // A route number selects a clock, so a value that does not parse in full
+    // is an error and is never kept partially, unlike the older keys. strtoull
+    // accepts a minus sign and negates the value, so that is refused first.
+    if (strchr(value, '-') != NULL) {
+        ERROR("__ParseRouteNumber: invalid clock route number %s", value);
+        return -1;
+    }
+
+    errno = 0;
+    result = strtoull(value, &end, 0);
+    if (end == value || *end != '\0' || errno != 0 || result > UINT32_MAX) {
+        ERROR("__ParseRouteNumber: invalid clock route number %s", value);
+        return -1;
+    }
+    *number = (uint32_t)result;
+    return 0;
+}
+
+static int
+__RouteKey(
+    _InOut_ struct __ParserState* state,
+    _In_    uint32_t              key,
+    _In_    const char*           name)
+{
+    if (state->RouteKeys & key) {
+        ERROR("__RouteKey: clock route %u repeats the key %s", state->Driver.Controller.ClockRouteCount, name);
+        return -1;
+    }
+    state->RouteKeys |= key;
+    return 0;
+}
+
+static int
+__CopyControllerCompatible(
+    _In_  const yaml_event_t* event,
+    _Out_ char*               compatible)
+{
+    size_t      length = event->data.scalar.length;
+    const char* value = (const char*)event->data.scalar.value;
+
+    if (length == 0 || length >= DRIVER_CONTROLLER_COMPATIBLE_MAX) {
+        ERROR("__CopyControllerCompatible: compatible has length %zu, the limit is %u",
+              length, (uint32_t)DRIVER_CONTROLLER_COMPATIBLE_MAX - 1);
+        return -1;
+    }
+
+    if (memchr(value, 0, length) != NULL) {
+        ERROR("__CopyControllerCompatible: compatible contains an embedded NUL");
+        return -1;
+    }
+
+    memcpy(compatible, value, length);
+    compatible[length] = '\0';
     return 0;
 }
 
@@ -288,6 +390,20 @@ __ConsumeEvent(
                         s->State = STATE_DRIVERVENDORS;
                     } else if (strcmp(value, "resources") == 0) {
                         s->State = STATE_DRIVERRESOURCES;
+                    } else if (strcmp(value, "controller-compatibles") == 0) {
+                        if (s->ControllerKeys & __CONTROLLER_KEY_COMPATIBLES) {
+                            ERROR("__ConsumeEvent: duplicate controller-compatibles list");
+                            return -1;
+                        }
+                        s->ControllerKeys |= __CONTROLLER_KEY_COMPATIBLES;
+                        s->State = STATE_CONTROLLERCOMPATIBLES_LIST;
+                    } else if (strcmp(value, "clock-routes") == 0) {
+                        if (s->ControllerKeys & __CONTROLLER_KEY_CLOCK_ROUTES) {
+                            ERROR("__ConsumeEvent: duplicate clock-routes list");
+                            return -1;
+                        }
+                        s->ControllerKeys |= __CONTROLLER_KEY_CLOCK_ROUTES;
+                        s->State = STATE_CLOCKROUTES;
                     } else {
                         ERROR("__ConsumeEvent: unexpected key: %s", value);
                         return -1;
@@ -556,6 +672,145 @@ __ConsumeEvent(
             }
             break;
 
+        case STATE_CONTROLLERCOMPATIBLES_LIST:
+            if (event->type != YAML_SEQUENCE_START_EVENT) {
+                ERROR("__ConsumeEvent: controller-compatibles must be a sequence, event %d in state %d",
+                      event->type, s->State);
+                return -1;
+            }
+            s->State = STATE_CONTROLLERCOMPATIBLES;
+            break;
+
+        case STATE_CONTROLLERCOMPATIBLES:
+            if (event->type == YAML_SEQUENCE_END_EVENT) {
+                if (s->Driver.Controller.CompatibleCount == 0) {
+                    ERROR("__ConsumeEvent: controller-compatibles list is empty");
+                    return -1;
+                }
+                s->State = STATE_DRIVERKEY;
+                break;
+            }
+
+            if (event->type != YAML_SCALAR_EVENT) {
+                ERROR("__ConsumeEvent: controller compatible must be a string, event %d in state %d",
+                      event->type, s->State);
+                return -1;
+            }
+
+            if (s->Driver.Controller.CompatibleCount == DRIVER_MAX_CONTROLLER_COMPATIBLES) {
+                ERROR("__ConsumeEvent: more than %u controller compatibles",
+                      (uint32_t)DRIVER_MAX_CONTROLLER_COMPATIBLES);
+                return -1;
+            }
+
+            status = __CopyControllerCompatible(
+                event,
+                &s->Driver.Controller.Compatibles[s->Driver.Controller.CompatibleCount][0]
+            );
+            if (status != 0) {
+                return status;
+            }
+            s->Driver.Controller.CompatibleCount++;
+            break;
+
+        case STATE_CLOCKROUTES:
+            switch (event->type) {
+                case YAML_SEQUENCE_START_EVENT:
+                    break;
+
+                case YAML_MAPPING_START_EVENT:
+                    // The route is built in place. It counts once its mapping
+                    // has ended with every key.
+                    if (s->Driver.Controller.ClockRouteCount == DRIVER_MAX_CLOCK_ROUTES) {
+                        ERROR("__ConsumeEvent: more than %u clock routes", (uint32_t)DRIVER_MAX_CLOCK_ROUTES);
+                        return -1;
+                    }
+                    memset(&s->Driver.Controller.ClockRoutes[s->Driver.Controller.ClockRouteCount], 0, sizeof(struct DriverClockRoute));
+                    s->RouteKeys = 0;
+                    s->State = STATE_CLOCKROUTE;
+                    break;
+
+                case YAML_SEQUENCE_END_EVENT:
+                    s->State = STATE_DRIVERKEY;
+                    break;
+
+                default:
+                    ERROR("__ConsumeEvent: unexpected event %d in state %d.", event->type, s->State);
+                    return -1;
+            }
+            break;
+
+        case STATE_CLOCKROUTE:
+            switch (event->type) {
+                case YAML_MAPPING_END_EVENT:
+                    if (s->RouteKeys != __ROUTE_KEYS_ALL) {
+                        ERROR("__ConsumeEvent: clock route %u lacks compatible, clock or controller-clock",
+                              s->Driver.Controller.ClockRouteCount);
+                        return -1;
+                    }
+                    s->Driver.Controller.ClockRouteCount++;
+                    s->State = STATE_CLOCKROUTES;
+                    break;
+
+                case YAML_SCALAR_EVENT:
+                    value = (char*)event->data.scalar.value;
+                    if (strcmp(value, "compatible") == 0) {
+                        status = __RouteKey(s, __ROUTE_KEY_COMPATIBLE, value);
+                        s->State = STATE_CLOCKROUTE_COMPATIBLE;
+                    } else if (strcmp(value, "clock") == 0) {
+                        status = __RouteKey(s, __ROUTE_KEY_CLOCK, value);
+                        s->State = STATE_CLOCKROUTE_CLOCK;
+                    } else if (strcmp(value, "controller-clock") == 0) {
+                        status = __RouteKey(s, __ROUTE_KEY_CONTROLLER_CLOCK, value);
+                        s->State = STATE_CLOCKROUTE_CONTROLLERCLOCK;
+                    } else {
+                        ERROR("__ConsumeEvent: unexpected clock route key: %s", value);
+                        return -1;
+                    }
+                    if (status != 0) {
+                        return status;
+                    }
+                    break;
+
+                default:
+                    ERROR("__ConsumeEvent: unexpected event %d in state %d.", event->type, s->State);
+                    return -1;
+            }
+            break;
+
+        case STATE_CLOCKROUTE_COMPATIBLE:
+            if (event->type != YAML_SCALAR_EVENT) {
+                ERROR("__ConsumeEvent: clock route compatible must be a string, event %d", event->type);
+                return -1;
+            }
+            status = __CopyControllerCompatible(
+                event,
+                &s->Driver.Controller.ClockRoutes[s->Driver.Controller.ClockRouteCount].Compatible[0]
+            );
+            if (status != 0) {
+                return status;
+            }
+            s->State = STATE_CLOCKROUTE;
+            break;
+
+        case STATE_CLOCKROUTE_CLOCK:
+        case STATE_CLOCKROUTE_CONTROLLERCLOCK:
+            if (event->type != YAML_SCALAR_EVENT) {
+                ERROR("__ConsumeEvent: clock route number must be a scalar, event %d", event->type);
+                return -1;
+            }
+            status = __ParseRouteNumber(
+                (const char*)event->data.scalar.value,
+                s->State == STATE_CLOCKROUTE_CLOCK ?
+                    &s->Driver.Controller.ClockRoutes[s->Driver.Controller.ClockRouteCount].Clock :
+                    &s->Driver.Controller.ClockRoutes[s->Driver.Controller.ClockRouteCount].ControllerClock
+            );
+            if (status != 0) {
+                return status;
+            }
+            s->State = STATE_CLOCKROUTE;
+            break;
+
         case STATE_COMPATIBLES_LIST:
             switch (event->type) {
                 case YAML_SEQUENCE_START_EVENT:
@@ -738,8 +993,10 @@ DmDriverConfigParseYaml(
 
     // Transfer the completed lists to the caller's configuration storage.
     memcpy(driverConfig, &state.Driver, sizeof(struct DriverConfiguration));
-    TRACE("DmDriverConfigParseYaml: parsed class %u, subclass %u, capabilities 0x%x",
-          driverConfig->Class, driverConfig->Subclass, driverConfig->Capabilities);
+    TRACE("DmDriverConfigParseYaml: parsed class %u, subclass %u, capabilities 0x%x, "
+          "%u controller compatibles, %u clock routes",
+          driverConfig->Class, driverConfig->Subclass, driverConfig->Capabilities,
+          driverConfig->Controller.CompatibleCount, driverConfig->Controller.ClockRouteCount);
     return OS_EOK;
 }
 

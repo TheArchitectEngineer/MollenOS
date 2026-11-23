@@ -27,7 +27,7 @@
 #define __need_minmax
 #include <assert.h>
 #include "dispatch.h"
-#include <internal/_storage.h>
+#include <ddk/storage-transfer.h>
 #include <os/handle.h>
 #include <ddk/utils.h>
 #include "manager.h"
@@ -392,7 +392,7 @@ ctt_storage_transfer_invocation(
         return;
     }
 
-    status = __StorageAttachTransfer(
+    status = StorageAttachTransfer(
         buffer,
         device->SectorSize,
         sectorCount,

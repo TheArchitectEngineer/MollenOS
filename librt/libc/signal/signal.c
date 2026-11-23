@@ -104,7 +104,7 @@ __ReportCrash(
     _In_ Context_t*   context,
     _In_ sig_element* signal)
 {
-    struct vali_link_message msg = VALI_MSG_INIT_HANDLE(GetProcessService());
+    struct vali_link_message msg = VALI_MSG_INIT_HANDLE(ServiceGetProcess());
     oserr_t                  oserr;
     oserr_t                  reportStatus;
     int                      status;

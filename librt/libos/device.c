@@ -31,7 +31,7 @@ OSDeviceIOCtl(
     _In_ void*               buffer,
     _In_ size_t              length)
 {
-    struct vali_link_message msg = VALI_MSG_INIT_HANDLE(GetDeviceService());
+    struct vali_link_message msg = VALI_MSG_INIT_HANDLE(ServiceGetDevice());
     oserr_t                  oserr = OS_EPROTOCOL;
     uint8_t*                 u8 = buffer;
     int                      status;

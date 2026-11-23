@@ -245,7 +245,7 @@ __PciBusControl(
     PciDevice_t*             device = context;
     struct DeviceResources*  resources = buffer;
     struct OSIOCtlBusControl activation = { 0 };
-    enum DeviceActivation    stage;
+    enum DeviceStage         stage;
     oserr_t                  status;
 
     (void)principal;
@@ -275,7 +275,7 @@ __PciBusControl(
             return OS_EINVALPARAMS;
         }
         
-        stage = *(enum DeviceActivation*)buffer;
+        stage = *(enum DeviceStage*)buffer;
         if (stage != DevicePrepare && stage != DeviceStart && stage != DeviceStop) {
             WARNING("__PciBusControl: invalid activation stage %u for %u:%u:%u.%u",
                 stage, device->Host->Identification.Segment, device->Bus,

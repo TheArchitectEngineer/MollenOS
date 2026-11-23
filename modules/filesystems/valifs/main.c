@@ -588,7 +588,7 @@ static int __ValiFS_GetSize(
     uint64_t                sectors;
     
     if (context->Storage.StorageType == VFSSTORAGE_TYPE_FILE) {
-        struct vali_link_message   msg = VALI_MSG_INIT_HANDLE(GetFileService());
+        struct vali_link_message   msg = VALI_MSG_INIT_HANDLE(ServiceGetFile());
         struct sys_file_descriptor descriptor;
         oserr_t                    oserr;
         

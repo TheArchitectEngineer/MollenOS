@@ -40,8 +40,16 @@ enum DmDriverState {
     DmDriverState_AVAILABLE
 };
 
+/**
+ * @brief One driver known to discovery.
+ * StartedHeader links the driver into g_startedDrivers once its process has
+ * reported its endpoint (DmDriverState_AVAILABLE). From then on Handle and
+ * Configuration never change and the entry is never freed, so
+ * DmDiscoverControllerManifest can read them under g_startedDriversLock alone.
+ */
 struct __DmDriver {
     element_t                   ListHeader;
+    element_t                   StartedHeader;
     uuid_t                      Id;
     uuid_t                      Handle;
     uuid_t                      Process;
@@ -62,14 +70,21 @@ static struct usched_mtx g_driversLock;
 static list_t            g_drivers  = LIST_INIT;
 static uuid_t            g_driverId = 1;
 
+// Drivers that reported their endpoint, for lookups by handle. The lock is
+// never held while another lock is taken, so it may be taken under the DMA
+// lock and a bus lock, where g_driversLock must not be taken.
+static struct usched_mtx g_startedDriversLock;
+static list_t            g_startedDrivers = LIST_INIT;
+
 void
 DmDiscoverInitialize(void)
 {
     uuid_t jobId;
     TRACE("DmDiscoverInitialize()");
 
-    // Initialize the driver list lock before scheduling discovery.
+    // Initialize the driver list locks before scheduling discovery.
     usched_mtx_init(&g_driversLock, USCHED_MUTEX_PLAIN);
+    usched_mtx_init(&g_startedDriversLock, USCHED_MUTEX_PLAIN);
 
     // The ramdisk is the initial source of drivers. Schedule discovery and device
     // refresh in usched context.
@@ -110,6 +125,7 @@ DmDiscoverAddDriver(
     memset(driver, 0, sizeof(struct __DmDriver));
 
     ELEMENT_INIT(&driver->ListHeader, 0, driver);
+    ELEMENT_INIT(&driver->StartedHeader, 0, driver);
     driver->Id            = g_driverId++;
     driver->Handle        = UUID_INVALID;
     driver->Process       = UUID_INVALID;
@@ -351,6 +367,56 @@ error:
     return status;
 }
 
+oserr_t
+DmDiscoverControllerManifest(
+    _In_  uuid_t                           driverHandle,
+    _Out_ struct DriverControllerManifest* manifest)
+{
+    oserr_t status = OS_ENOENT;
+
+    if (manifest == NULL) {
+        return OS_EINVALPARAMS;
+    }
+
+    if (driverHandle == UUID_INVALID) {
+        return OS_ENOENT;
+    }
+
+    // Only this lock is held while the list is read. Handle and the
+    // configuration of a listed driver never change.
+    usched_mtx_lock(&g_startedDriversLock);
+    foreach (i, &g_startedDrivers) {
+        struct __DmDriver* driver = i->value;
+
+        if (driver->Handle == driverHandle) {
+            *manifest = driver->Configuration->Controller;
+            status = OS_EOK;
+            break;
+        }
+    }
+    usched_mtx_unlock(&g_startedDriversLock);
+    return status;
+}
+
+int
+DmDiscoverHasDriver(
+    _In_ const struct DriverIdentification* identification)
+{
+    int found = 0;
+
+    usched_mtx_lock(&g_driversLock);
+    foreach (i, &g_drivers) {
+        struct __DmDriver* driver = i->value;
+
+        if (DmDriverMatchScore(driver->Configuration, identification) != 0) {
+            found = 1;
+            break;
+        }
+    }
+    usched_mtx_unlock(&g_driversLock);
+    return found;
+}
+
 // Requires g_driversLock. The entry remains valid while that lock is held.
 static struct __DmDriver*
 __GetDriver(
@@ -448,6 +514,12 @@ DmHandleNotify(
     driver->Handle = driverHandle;
     driver->State = DmDriverState_AVAILABLE;
     TRACE("DmHandleNotify: driver %u is available", driverId);
+
+    // Devices are assigned to the driver by this handle from now on, so
+    // lookups by handle can find its manifest. Handle is set first.
+    usched_mtx_lock(&g_startedDriversLock);
+    list_append(&g_startedDrivers, &driver->StartedHeader);
+    usched_mtx_unlock(&g_startedDriversLock);
     __SubscribeToDriver(driver);
 
     // Register devices that were queued while the driver was starting.

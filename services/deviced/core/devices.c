@@ -29,7 +29,7 @@
 #include <devices.h>
 #include <discover.h>
 #include <ddk/devices/bus.h>
-#include <ddk/resources.h>
+#include <ddk/devices/resources.h>
 #include <ddk/convert.h>
 #include <ddk/utils.h>
 #include <gracht/link/vali.h>
@@ -162,6 +162,29 @@ DmDevicesRegister(
     return OS_EOK;
 }
 
+oserr_t
+DmDeviceGetDriver(
+    _In_  uuid_t   deviceId,
+    _In_  uint64_t principal,
+    _Out_ uuid_t*  driverHandle)
+{
+    DmDevice_t* device;
+    oserr_t     status = OS_EOK;
+
+    usched_mtx_lock(&g_dmDevicesLock);
+    device = DmDeviceFindLocked(deviceId);
+    if (device == NULL || device->Removing) {
+        status = OS_ENOENT;
+    } else if (principal == 0 || device->DriverId == UUID_INVALID ||
+               device->DriverPrincipal != principal) {
+        status = OS_EPERMISSIONS;
+    } else {
+        *driverHandle = device->DriverId;
+    }
+    usched_mtx_unlock(&g_dmDevicesLock);
+    return status;
+}
+
 void
 DmHandleGetDevicesByProtocol(
     _In_ struct gracht_message* message,
@@ -291,13 +314,13 @@ DmHandleIoctl(
             goto done;
         }
         enableDma = (((struct OSIOCtlBusControl*)buffer)->Flags &
-                     __DEVICEMANAGER_IOCTL_BUSMASTER_ENABLE) != 0;
+                     DEVICEMANAGER_IOCTL_BUSMASTER_ENABLE) != 0;
     } else if (request == OSIOCTLREQUEST_DEVICE_ACTIVATE) {
-        if (buffer == NULL || length != sizeof(enum DeviceActivation)) {
+        if (buffer == NULL || length != sizeof(enum DeviceStage)) {
             status = OS_EINVALPARAMS;
             goto done;
         }
-        enableDma = *(enum DeviceActivation*)buffer == DeviceStart;
+        enableDma = *(enum DeviceStage*)buffer == DeviceStart;
     }
     if (enableDma) {
         status = DmDmaCheckControlLocked(deviceId, principal, true);

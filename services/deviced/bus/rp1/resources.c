@@ -59,17 +59,17 @@ Rp1ChildResourceControl(
     }
 
     if (request == OSIOCTLREQUEST_DEVICE_ACTIVATE) {
-        enum DeviceActivation stage;
+        enum DeviceStage stage;
         
         // For children other than GEM, only record preparation state here for
         // the start and stop checks. These requests do not change hardware.
-        if (buffer == NULL || length != sizeof(enum DeviceActivation)) {
+        if (buffer == NULL || length != sizeof(enum DeviceStage)) {
             ERROR("Rp1ChildResourceControl: device %u invalid activation buffer %p, length %zu, expected %zu",
-                  child->DeviceId, buffer, length, sizeof(enum DeviceActivation));
+                  child->DeviceId, buffer, length, sizeof(enum DeviceStage));
             return OS_EINVALPARAMS;
         }
 
-        stage = *(enum DeviceActivation*)buffer;
+        stage = *(enum DeviceStage*)buffer;
         if (stage == DevicePrepare) {
             child->Resources.Prepared = 1;
             return OS_EOK;

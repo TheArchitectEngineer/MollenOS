@@ -19,7 +19,7 @@
 #include <ddk/utils.h>
 #include <ds/hashtable.h>
 #include <gracht/server.h>
-#include <internal/_service.h>
+#include <ddk/service-caller.h>
 #include <internal/_tls.h>
 #include <os/grants.h>
 #include <os/handle.h>
@@ -149,7 +149,7 @@ VFSNodeHandleValidate(
     _In_  uint32_t                              requiredAccess,
     _Out_ uuid_t*                               resourceIDOut)
 {
-    if (!__IsAuthenticatedCaller(caller)) {
+    if (!ServiceIsAuthenticatedCaller(caller)) {
         return OS_EPERMISSIONS;
     }
     return OSHandleValidate(
@@ -170,7 +170,7 @@ VFSNodeHandleExport(
 
     // Tokens currently address security groups with uuid_t. Reject narrowing
     // rather than issuing a token for a different group.
-    if (!__IsAuthenticatedCaller(caller)) {
+    if (!ServiceIsAuthenticatedCaller(caller)) {
         return OS_EPERMISSIONS;
     }
 

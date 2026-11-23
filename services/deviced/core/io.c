@@ -31,7 +31,7 @@ DmIoRelease(
     oserr_t status;
 
     if (*acquired) {
-        status = ReleaseDeviceIo(space);
+        status = DeviceIoRelease(space);
         if (status != OS_EOK) {
             ERROR("DmIoRelease: failed to release I/O id %u type %u (%u)",
                   space->Id, space->Type, status);
@@ -69,7 +69,7 @@ DmIoCreateMemory(
 
     // The DDK fills the description even when registration fails. Only copy
     // a successful registration into the owner's persistent slot.
-    status = CreateDeviceMemoryIo(&resource, (uintptr_t)base, (size_t)length);
+    status = DeviceIoCreateMemory(&resource, (uintptr_t)base, (size_t)length);
     if (status != OS_EOK) {
         ERROR("DmIoCreateMemory: failed to register memory base 0x%llx length 0x%llx (%u)",
               (unsigned long long)base, (unsigned long long)length, status);
@@ -92,7 +92,7 @@ DmIoDestroy(
             continue;
         }
 
-        oserr = DestroyDeviceIo(&spaces[i]);
+        oserr = DeviceIoDestroy(&spaces[i]);
         if (oserr != OS_EOK) {
             ERROR("DmIoDestroy: failed to destroy I/O index %zu id %u type %u (%u)",
                   i, spaces[i].Id, spaces[i].Type, oserr);

@@ -21,7 +21,7 @@
 //#define __TRACE
 #define __need_minmax
 #include "msd.h"
-#include <internal/_storage.h>
+#include <ddk/storage-transfer.h>
 #include <os/handle.h>
 #include <ddk/utils.h>
 #include <os/handle.h>
@@ -574,7 +574,7 @@ ctt_storage_transfer_invocation(
         return;
     }
 
-    status = __StorageAttachTransfer(
+    status = StorageAttachTransfer(
         buffer,
         device->Descriptor.SectorSize,
         sectorCount,

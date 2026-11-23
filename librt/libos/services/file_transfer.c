@@ -36,7 +36,7 @@ __TransferFileBuffer(
     _In_  bool                 write,
     _Out_ size_t*              bytesTransferred)
 {
-    struct vali_link_message msg = VALI_MSG_INIT_HANDLE(GetFileService());
+    struct vali_link_message msg = VALI_MSG_INIT_HANDLE(ServiceGetFile());
     struct sys_shm_transfer  description;
     unsigned int             scope = GrantTokenScopeRead;
     size_t                   length;

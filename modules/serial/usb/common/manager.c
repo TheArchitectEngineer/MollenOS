@@ -69,7 +69,7 @@ oserr_t
 UsbManagerInitialize(void)
 {
     // Wait up to 5 seconds for the USB service before starting the manager.
-    if (WaitForUsbService(5000) != OS_EOK) {
+    if (ServiceWaitForUsb(5000) != OS_EOK) {
         ERROR(" => Failed to start usb manager, as usb service never became available.");
         return OS_ETIMEOUT;
     }

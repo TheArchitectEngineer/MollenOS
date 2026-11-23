@@ -19,7 +19,7 @@
 #ifndef __ETHERNET_PHY_H__
 #define __ETHERNET_PHY_H__
 
-#include <ddk/ethernet.h>
+#include <ddk/devices/ethernet.h>
 
 #include "mdio.h"
 

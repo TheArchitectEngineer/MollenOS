@@ -225,7 +225,7 @@ __ParseRamdisk(
     oserr_t                        oserr = OS_EOK;
     TRACE("__ParseRamdisk(size=%zu)", ramdiskSize);
 
-    DdkInitrdConfigureVafsReader(&configuration);
+    InitrdConfigureVafsReader(&configuration);
     status = vafs_reader_open_memory(ramdiskBuffer, ramdiskSize, &configuration, &vafs);
     if (status) {
         ERROR("__ParseRamdisk: opening ramdisk reader failed: %i (errno %i)", status, errno);
@@ -287,7 +287,7 @@ DmRamdiskDiscover(void)
     TRACE("DmRamdiskDiscover()");
 
     // The VaFs memory reader requires the ramdisk to stay mapped during discovery.
-    oserr = DdkUtilsMapRamdisk(&ramdisk, &ramdiskSize);
+    oserr = InitrdMap(&ramdisk, &ramdiskSize);
     if (oserr != OS_EOK) {
         ERROR("DmRamdiskDiscover: failed to map ramdisk into address space: %u", oserr);
         return;

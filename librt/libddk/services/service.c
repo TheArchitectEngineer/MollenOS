@@ -108,73 +108,73 @@ __WaitForService(
     return OS_EOK;
 }
 
-uuid_t GetDeviceService(void)
+uuid_t ServiceGetDevice(void)
 {
     return __GetService(SERVICE_INDEX_DEVICE);
 }
 
-uuid_t GetUsbService(void)
+uuid_t ServiceGetUsb(void)
 {
     return __GetService(SERVICE_INDEX_USB);
 }
 
-uuid_t GetProcessService(void)
+uuid_t ServiceGetProcess(void)
 {
     return __GetService(SERVICE_INDEX_PROCESS);
 }
 
-uuid_t GetFileService(void)
+uuid_t ServiceGetFile(void)
 {
     return __GetService(SERVICE_INDEX_FILE);
 }
 
-uuid_t GetNetService(void)
+uuid_t ServiceGetNet(void)
 {
     return __GetService(SERVICE_INDEX_NET);
 }
 
-uuid_t GetSysLogService(void)
+uuid_t ServiceGetSysLog(void)
 {
     return __GetService(SERVICE_INDEX_SYSLOG);
 }
 
 oserr_t
-WaitForDeviceService(
+ServiceWaitForDevice(
     _In_ size_t timeout)
 {
     return __WaitForService(SERVICE_INDEX_DEVICE, timeout);
 }
 
 oserr_t
-WaitForUsbService(
+ServiceWaitForUsb(
     _In_ size_t timeout)
 {
     return __WaitForService(SERVICE_INDEX_USB, timeout);
 }
 
 oserr_t
-WaitForProcessService(
+ServiceWaitForProcess(
     _In_ size_t timeout)
 {
     return __WaitForService(SERVICE_INDEX_PROCESS, timeout);
 }
 
 oserr_t
-WaitForFileService(
+ServiceWaitForFile(
     _In_ size_t timeout)
 {
     return __WaitForService(SERVICE_INDEX_FILE, timeout);
 }
 
 oserr_t
-WaitForNetService(
+ServiceWaitForNet(
     _In_ size_t timeout)
 {
     return __WaitForService(SERVICE_INDEX_NET, timeout);
 }
 
 oserr_t
-WaitForSysLogService(
+ServiceWaitForSysLog(
     _In_ size_t timeout)
 {
     return __WaitForService(SERVICE_INDEX_SYSLOG, timeout);

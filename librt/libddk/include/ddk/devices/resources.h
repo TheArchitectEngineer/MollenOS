@@ -29,9 +29,10 @@ _CODE_BEGIN
 #define DEVICE_MAX_REGISTERS 8
 
 /**
- * @brief Identity of a child's immediate PCI parent, supplied by its resource provider.
- * VendorId zero means unavailable. This identifies the immediate PCI parent,
- * not the device itself or whether a peripheral integration is supported.
+ * @brief Identifies the PCI device that a device sits directly below, as
+ * reported by the bus of the device. A VendorId of zero means there is no such
+ * parent, or the bus does not know it. The values describe the parent only.
+ * They say nothing about the device itself.
  */
 struct DeviceParentPciIdentity {
     uint32_t VendorId;
@@ -40,11 +41,12 @@ struct DeviceParentPciIdentity {
 };
 
 /**
- * @brief Registered IO descriptors and parent identity.
- * The provider supplies register mappings on request.
- * ParentPci is zero when the provider cannot describe an immediate PCI parent.
- * This is the DEVICE_RESOURCES ioctl layout; rebuild providers and clients
- * together when changing it.
+ * @brief The register ranges of a device and the identity of its PCI parent.
+ * Count gives the number of valid entries in Registers. ParentPci is all zero
+ * when the bus cannot name a PCI parent.
+ *
+ * This is the layout of the OSIOCTLREQUEST_DEVICE_RESOURCES ioctl. When it
+ * changes, deviced and every driver must be rebuilt together.
  */
 struct DeviceResources {
     uint32_t                       Count;
@@ -52,20 +54,30 @@ struct DeviceResources {
     struct DeviceParentPciIdentity ParentPci;
 };
 
-enum DeviceActivation {
-    // Enable register access and provider-owned bus or power dependencies.
+/**
+ * The stages a driver moves its device through with DeviceSetStage.
+ */
+enum DeviceStage {
+    // Turn on access to the registers of the device, together with the bus
+    // and the power it depends on.
     DevicePrepare,
-    // Permit DMA after the driver has prepared buffers and interrupts.
+    // Let the device do DMA. Requested once the driver has set up its buffers
+    // and interrupts.
     DeviceStart,
-    // Finish provider shutdown after the driver has halted DMA.
+    // Turn DMA off again and shut the device down on its bus. Requested after
+    // the driver has halted the device.
     DeviceStop
 };
 
 /**
- * @brief Query provider-owned register descriptors without mapping them.
- * @param device Registered device identity.
- * @param resources Output populated only on success.
- * @return Provider status. No physical-address fallback is performed.
+ * @brief Asks the bus of the device for its register ranges. The ranges are
+ * described, not mapped.
+ *
+ * @param device    ID of the registered device.
+ * @param resources Receives the register ranges. Only written on success.
+ * @return OS_EOK on success, OS_EINVALPARAMS for a missing output,
+ *         OS_EPROTOCOL when the answer holds more than DEVICE_MAX_REGISTERS
+ *         ranges, or the error from the bus.
  */
 DDKDECL(oserr_t,
 DeviceGetResources(
@@ -73,15 +85,18 @@ DeviceGetResources(
     _Out_ struct DeviceResources* resources));
 
 /**
- * @brief Change the device activation stage through its provider.
- * @param device Registered device identity.
- * @param stage Prepare, start or stop; repeated requests are idempotent.
- * @return Provider status; failure leaves the driver responsible for cleanup.
+ * @brief Moves the device to a new stage through its bus. Asking for the stage
+ * the device is already in succeeds and changes nothing.
+ *
+ * @param device ID of the registered device.
+ * @param stage  DevicePrepare, DeviceStart or DeviceStop.
+ * @return OS_EOK on success, or the error from the bus. After a failure the
+ *         driver still has to clean up what it set up itself.
  */
 DDKDECL(oserr_t,
-DeviceActivate(
-    _In_ uuid_t                device,
-    _In_ enum DeviceActivation stage));
+DeviceSetStage(
+    _In_ uuid_t           device,
+    _In_ enum DeviceStage stage));
 
 _CODE_END
 

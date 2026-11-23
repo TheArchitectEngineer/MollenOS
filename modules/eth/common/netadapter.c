@@ -18,7 +18,7 @@
 
 #include <ddk/utils.h>
 #include <os/usched/mutex.h>
-#include <internal/_service.h>
+#include <ddk/service-caller.h>
 #include <internal/_utils.h>
 #include <io.h>
 #include <stdlib.h>
@@ -74,7 +74,7 @@ EthernetFindSession(
 
     // The reply endpoint alone does not authenticate a client. Require the
     // kernel principal as well before comparing the session token.
-    if (!__IsAuthenticatedCaller(&message->security)) {
+    if (!ServiceIsAuthenticatedCaller(&message->security)) {
         return NULL;
     }
 
@@ -99,7 +99,7 @@ EthernetWasClosed(
     _In_ const struct gracht_message*         message,
     _In_ const struct ctt_netadapter_session* identity)
 {
-    if (!__IsAuthenticatedCaller(&message->security)) {
+    if (!ServiceIsAuthenticatedCaller(&message->security)) {
         return false;
     }
 

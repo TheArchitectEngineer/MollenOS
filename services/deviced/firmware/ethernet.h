@@ -22,7 +22,7 @@
 #define __FIRMWARE_ETHERNET_H__
 
 #include <firmware/tree.h>
-#include <ddk/ethernet.h>
+#include <ddk/devices/ethernet.h>
 
 /**
  * @brief Resolve a MAC's PHY and copy its firmware configuration.

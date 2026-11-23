@@ -213,6 +213,19 @@ typedef struct MFSBucketMap {
     MapRecord_t* Records;
 } MFSBucketMap_t;
 
+/**
+ * @brief An open file or directory, or a record found by a search.
+ *
+ * Run lengths: the bucket map is the source for the length of every run.
+ * StartLength and DataBucketLength are copies, taken when the handle was set up
+ * or last moved. A run can grow while a handle points into it: the last run of
+ * a file is made longer when the new buckets follow it on disk (see
+ * MfsEnsureRecordSpace), by another handle of the same file, or by this handle
+ * before a crash left the record with the old StartLength. So when the copy
+ * says the position is at or past the end of the run, the length is first read
+ * from the map (MFSAdvanceToNextBucket, and the walk in FsSeekInFile). The
+ * record gets StartLength at close.
+ */
 typedef struct MFSEntry {
     mstring_t* Name;
     uint32_t   Owner;
@@ -290,11 +303,17 @@ typedef struct FileSystemMFS {
 } FileSystemMFS_t;
 
 /**
- * @brief
- * @param mfs
- * @param bucketCount
- * @param allocatedRecord
- * @return
+ * @brief Takes buckets from the free list and links them into a chain that ends
+ * with MFS_ENDOFCHAIN. Free runs that lie next to each other on disk are handed
+ * out as one run. The write order and what is on disk after a failed write are
+ * described in bucket_map.c.
+ * @param mfs Mounted filesystem.
+ * @param bucketCount Number of buckets to take. Must not be 0.
+ * @param allocatedRecord Receives the first run of the chain: Link is its first
+ *                        bucket and Length its length in buckets.
+ * @return OS_EOK, OS_EINCOMPLETE when the free list holds too few buckets
+ *         (nothing is written then), OS_EINVALPARAMS for a count of 0 or a disk
+ *         without free buckets, or the error of the disk write that failed.
  */
 extern oserr_t
 MFSBucketMapAllocate(
@@ -333,15 +352,37 @@ MFSBucketMapSetLinkAndLength(
         _In_ bool             updateLength);
 
 /**
- * @brief
- * @param mfs
- * @param entry
- * @return
+ * @brief Moves entry on from the end of its data bucket. The read, write and
+ * clear loops call it when the position equals BucketByteBoundary plus the
+ * handle's DataBucketLength. When the bucket map has a longer length for the
+ * run than the handle, the handle stays in the run and takes that length (see
+ * MFSEntry_t). Otherwise the handle steps to the next run of the chain.
+ * @param mfs Mounted filesystem.
+ * @param entry Handle to move. Its data bucket must not be MFS_ENDOFCHAIN.
+ * @return OS_EOK when the handle stayed in a longer run or moved to the next
+ *         run, OS_ENOENT when the run is the last one (the handle is then
+ *         unchanged), or OS_EDEVFAULT when a bucket is outside the map.
  */
 extern oserr_t
 MFSAdvanceToNextBucket(
         _In_ FileSystemMFS_t* mfs,
         _In_ MFSEntry_t*      entry);
+
+/**
+ * @brief Makes a run the data bucket of entry. When the run is the first run of
+ * the file, StartLength is set to length as well, so the length the record gets
+ * at close is the one of the bucket map.
+ * @param entry Handle to update.
+ * @param bucket First bucket of the run.
+ * @param length Length of the run in buckets, as read from the bucket map.
+ * @param byteBoundary File position of the first byte of the run.
+ */
+extern void
+MFSEntrySetDataRun(
+        _In_ MFSEntry_t* entry,
+        _In_ bucket_t    bucket,
+        _In_ uint32_t    length,
+        _In_ uint64_t    byteBoundary);
 
 /* MfsZeroBucket
  * Wipes the given bucket and count with zero values
@@ -378,8 +419,19 @@ MFSCloneBucketData(
         _In_ uint32_t         destinationBucket,
         _In_ uint32_t         destinationLength);
 
-/* MfsEnsureRecordSpace
- * Ensures that the given record has the space neccessary for the required data. */
+/**
+ * @brief Gives the file of entry buckets up to spaceRequired bytes, when it has
+ * fewer (AllocatedSize). The new buckets are added after the last run of the
+ * file. When they follow the last run on disk, the last run is made longer
+ * instead of linking a new run. The last run is found by walking the bucket map
+ * from the handle's data bucket, so a write at the end of a file costs the same
+ * however many runs the file has.
+ * @param mfs Mounted filesystem.
+ * @param entry Handle of the file. AllocatedSize, StartLength and, when the
+ *              handle is in the last run, DataBucketLength are updated.
+ * @param spaceRequired Number of bytes the file must have room for.
+ * @return OS_EOK, or OS_EDEVFAULT when the allocation or the map update failed.
+ */
 extern oserr_t
 MfsEnsureRecordSpace(
         _In_ FileSystemMFS_t* mfs,

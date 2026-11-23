@@ -193,7 +193,7 @@ __RegisterStorage(
         _In_ unsigned int Flags)
 {
     int                      status;
-    struct vali_link_message msg = VALI_MSG_INIT_HANDLE(GetFileService());
+    struct vali_link_message msg = VALI_MSG_INIT_HANDLE(ServiceGetFile());
 
     status = sys_storage_register(GetGrachtClient(), &msg.base, ProtocolServerId, DeviceId, Flags);
     if (status) {
@@ -213,7 +213,7 @@ __UnregisterStorage(
         _In_ uint8_t forced)
 {
     int                      status;
-    struct vali_link_message msg = VALI_MSG_INIT_HANDLE(GetFileService());
+    struct vali_link_message msg = VALI_MSG_INIT_HANDLE(ServiceGetFile());
 
     status = sys_storage_unregister(
         GetGrachtClient(),

@@ -58,9 +58,9 @@ DeviceGetResources(
 }
 
 oserr_t
-DeviceActivate(
-    _In_ uuid_t                device,
-    _In_ enum DeviceActivation stage)
+DeviceSetStage(
+    _In_ uuid_t           device,
+    _In_ enum DeviceStage stage)
 {
     return OSDeviceIOCtl(device, OSIOCTLREQUEST_DEVICE_ACTIVATE, &stage, sizeof(stage));
 }

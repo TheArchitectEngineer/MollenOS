@@ -52,18 +52,23 @@ typedef struct OSBootVideoDescriptor {
 _CODE_BEGIN
 
 /**
- * @brief Queries the information about the boot video environment.
+ * @brief Reads the video mode that the bootloader set up.
+ *
  * @param descriptor Receives the boot video mode on success.
  * @return OS_EOK on success, or an error from the kernel.
  */
 DDKDECL(oserr_t,
-QueryBootVideoInformation(
+BootVideoQuery(
     _In_ OSBootVideoDescriptor_t* descriptor));
 
-/* CreateDisplayFramebuffer
- * Creates a new display framebuffer to use for direct drawing. */
+/**
+ * @brief Maps the framebuffer of the boot video mode into the memory space of
+ * the caller, so the caller can draw to the screen directly.
+ *
+ * @return The address of the framebuffer, or NULL when it could not be mapped.
+ */
 DDKDECL(void*,
-CreateDisplayFramebuffer(void));
+BootVideoMapFramebuffer(void));
 
 _CODE_END
 #endif //!__DDK_VIDEO_H__

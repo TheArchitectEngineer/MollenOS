@@ -22,7 +22,7 @@
 #include <gracht/link/vali.h>
 #include <internal/_gracht.h>
 #include <internal/_utils.h>
-#include <internal/_storage.h>
+#include <ddk/storage-transfer.h>
 #include <vfs/storage.h>
 #include <ctt_storage_service_client.h>
 
@@ -59,7 +59,7 @@ __DeviceQueryStats(
     }
 
     if (osStatus == OS_EOK) {
-        from_sys_disk_descriptor_dkk(&gdescriptor, stats);
+        from_sys_disk_descriptor_ddk(&gdescriptor, stats);
         if (stats->SectorSize == 0) {
             return OS_EINVALPARAMS;
         }
@@ -111,7 +111,7 @@ static oserr_t __ReadDevice(
         _In_ size_t             count,
         _In_ size_t*            read)
 {
-    return __StorageTransfer(
+    return StorageTransfer(
         storage->Protocol.Storage.Device.DriverID,
         storage->Protocol.Storage.Device.DeviceID,
         buffer,
@@ -131,7 +131,7 @@ static oserr_t __WriteDevice(
         _In_ size_t             count,
         _In_ size_t*            written)
 {
-    return __StorageTransfer(
+    return StorageTransfer(
         storage->Protocol.Storage.Device.DriverID,
         storage->Protocol.Storage.Device.DeviceID,
         buffer,

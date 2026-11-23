@@ -29,7 +29,7 @@ OSSystemLog(
         _In_ enum OSSysLogLevel level,
         _In_ const char*        fmt, ...)
 {
-    struct vali_link_message msg = VALI_MSG_INIT_HANDLE(GetSysLogService());
+    struct vali_link_message msg = VALI_MSG_INIT_HANDLE(ServiceGetSysLog());
     va_list                  args;
     char                     buffer[256];
 

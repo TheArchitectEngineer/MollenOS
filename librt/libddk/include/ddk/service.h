@@ -54,13 +54,19 @@ struct ServiceStartupOptions {
 #define SERVICE_SYSLOG_PATH "/service/syslog"
 #define SERVICE_SERVED_PATH "/service/serve"
 
-// Service targets that are available for Vali
-DDKDECL(uuid_t, GetDeviceService(void));
-DDKDECL(uuid_t, GetUsbService(void));
-DDKDECL(uuid_t, GetProcessService(void));
-DDKDECL(uuid_t, GetFileService(void));
-DDKDECL(uuid_t, GetNetService(void));
-DDKDECL(uuid_t, GetSysLogService(void));
+/**
+ * @brief Returns the handle of a system service. The handle is looked up by
+ * the path of the service on the first call and reused after that.
+ *
+ * @return The handle of the service, or UUID_INVALID while the service has not
+ *         registered its path yet.
+ */
+DDKDECL(uuid_t, ServiceGetDevice(void));
+DDKDECL(uuid_t, ServiceGetUsb(void));
+DDKDECL(uuid_t, ServiceGetProcess(void));
+DDKDECL(uuid_t, ServiceGetFile(void));
+DDKDECL(uuid_t, ServiceGetNet(void));
+DDKDECL(uuid_t, ServiceGetSysLog(void));
 
 /**
  * @brief Waits until the service has registered its handle path. The path is
@@ -71,22 +77,22 @@ DDKDECL(uuid_t, GetSysLogService(void));
  *         appear in time.
  */
 DDKDECL(oserr_t,
-WaitForDeviceService(
+ServiceWaitForDevice(
     _In_ size_t timeout));
 DDKDECL(oserr_t,
-WaitForUsbService(
+ServiceWaitForUsb(
     _In_ size_t timeout));
 DDKDECL(oserr_t,
-WaitForProcessService(
+ServiceWaitForProcess(
     _In_ size_t timeout));
 DDKDECL(oserr_t,
-WaitForFileService(
+ServiceWaitForFile(
     _In_ size_t timeout));
 DDKDECL(oserr_t,
-WaitForNetService(
+ServiceWaitForNet(
     _In_ size_t timeout));
 DDKDECL(oserr_t,
-WaitForSysLogService(
+ServiceWaitForSysLog(
     _In_ size_t timeout));
 
 _CODE_END

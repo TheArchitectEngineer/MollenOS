@@ -25,7 +25,7 @@
 #define __TRACE
 #include "private.h"
 
-#include <internal/_storage.h>
+#include <ddk/storage-transfer.h>
 #include <os/handle.h>
 #include <ddk/convert.h>
 #include <ddk/utils.h>
@@ -402,7 +402,7 @@ __ctt_storage_transfer_invocation(
     sector.u.LowPart = sectorLow;
     sector.u.HighPart = sectorHigh;
 
-    oserr = __StorageAttachTransfer(
+    oserr = StorageAttachTransfer(
         buffer,
         device->Descriptor.SectorSize,
         sectorCount,

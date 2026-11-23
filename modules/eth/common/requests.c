@@ -17,7 +17,7 @@
  */
 
 #include <ddk/utils.h>
-#include <internal/_service.h>
+#include <ddk/service-caller.h>
 
 #include "netadapter-private.h"
 
@@ -64,7 +64,7 @@ ctt_netadapter_open_invocation(
     device = EthernetFindDevice(deviceId);
     if (device == NULL || port) {
         status = OS_ENOENT;
-    } else if (!__IsAuthenticatedCaller(&message->security)) {
+    } else if (!ServiceIsAuthenticatedCaller(&message->security)) {
         status = OS_EPERMISSIONS;
     } else {
         status = EthernetOpen(device, message, features);

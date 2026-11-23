@@ -131,10 +131,13 @@ sys_device_ioctl_invocation(
         principal = message->security.principal;
     }
 
-    // Input requests return device data in the response buffer.
+    // Input requests return device data in the response buffer. The buffer
+    // starts as a copy of the request body, so a request can carry selectors
+    // such as an interrupt index or a supply name. Every handler validates the
+    // copied body before it uses it.
     if (request & __IOCTL_IN) {
         uint8_t out[data_count];
-        memset(out, 0, data_count);
+        memcpy(out, data, data_count);
 
         oserr = DmHandleIoctl(
             principal,

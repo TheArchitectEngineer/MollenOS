@@ -229,7 +229,7 @@ OnLoad(void)
     }
     memset(Ps2Controller, 0, sizeof(PS2Controller_t));
 
-    if (WaitForDeviceService(1000) != OS_EOK) {
+    if (ServiceWaitForDevice(1000) != OS_EOK) {
         ERROR(" => Failed to start ps2 driver, as device service never became available.");
         return OS_ETIMEOUT;
     }

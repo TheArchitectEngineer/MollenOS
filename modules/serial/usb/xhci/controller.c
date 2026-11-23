@@ -208,7 +208,7 @@ __SetupController(
         return oserr;
     }
 
-    oserr = DeviceActivate(controller->Base.Device->Id, DeviceStart);
+    oserr = DeviceSetStage(controller->Base.Device->Id, DeviceStart);
     if (oserr != OS_EOK) {
         return oserr;
     }
@@ -282,7 +282,7 @@ HCIControllerCreate(
     list_construct(&controller->XhciEndpoints);
     list_construct(&controller->Devices);
     
-    status = DeviceActivate(device->Id, DevicePrepare);
+    status = DeviceSetStage(device->Id, DevicePrepare);
     if (status == OS_EOK) {
         controller->Prepared = true;
         status = DeviceGetResources(device->Id, &resources);
@@ -441,7 +441,7 @@ HCIControllerDestroy(
     }
     
     if (controller->Prepared) {
-        status = DeviceActivate(baseController->Device->Id, DeviceStop);
+        status = DeviceSetStage(baseController->Device->Id, DeviceStop);
         if (status != OS_EOK) {
             WARNING("XHCI teardown: activation release failed (%u); retry pending", status);
             goto retry;

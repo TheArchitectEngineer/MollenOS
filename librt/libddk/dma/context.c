@@ -56,7 +56,7 @@ __RequestBinding(
     _InOut_ struct DMAContext* context,
     _Out_   bool*              decoded)
 {
-    struct vali_link_message message = VALI_MSG_INIT_HANDLE(GetDeviceService());
+    struct vali_link_message message = VALI_MSG_INIT_HANDLE(ServiceGetDevice());
     OSDmaBindingResult_t     binding = { 0 };
     oserr_t                  result = OS_EPROTOCOL;
     int                      status;

@@ -15,7 +15,7 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include <internal/_storage.h>
+#include <ddk/storage-transfer.h>
 #include <internal/_gracht.h>
 #include <internal/_shm_transfer.h>
 #include <internal/_utils.h>
@@ -125,7 +125,7 @@ __RetryDelay(void)
 }
 
 oserr_t
-__StorageTransfer(
+StorageTransfer(
     _In_  uuid_t              driverID,
     _In_  uuid_t              deviceID,
     _In_  uuid_t              bufferID,

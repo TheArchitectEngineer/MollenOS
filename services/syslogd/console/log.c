@@ -32,7 +32,7 @@ void LogInitialize(void)
     int                     i = 0;
 
     // Assume this call always succeed
-    QueryBootVideoInformation(&bootVideo);
+    BootVideoQuery(&bootVideo);
 
     // Create all system outputs
     while (g_outputs[i].make) {

@@ -47,7 +47,7 @@ __Rp1InterruptWrite(
     // A successful PCI write may still be waiting at a bridge. Read the source's
     // normal register before returning so callers can depend on the change
     // having reached RP1 before they allow interrupt delivery.
-    status = WriteDeviceIo(controller->Registers, alias + RP1_IRQ_CFG(source), bits, 4);
+    status = DeviceIoWrite(controller->Registers, alias + RP1_IRQ_CFG(source), bits, 4);
     if (status != OS_EOK) {
         ERROR("__Rp1InterruptWrite: source %u offset 0x%x bits 0x%x failed (%u)",
             source, alias + RP1_IRQ_CFG(source), bits, status);
@@ -55,7 +55,7 @@ __Rp1InterruptWrite(
     }
 
     // The register value is unused. This read completes the posted write.
-    (void)ReadDeviceIo(controller->Registers, RP1_IRQ_CFG(source), 4);
+    (void)DeviceIoRead(controller->Registers, RP1_IRQ_CFG(source), 4);
     return OS_EOK;
 }
 

@@ -31,7 +31,7 @@ ProcessGetLibraryHandles(
     _In_  Handle_t* ModuleList,
     _Out_ int*      ModuleCountOut)
 {
-    struct vali_link_message msg = VALI_MSG_INIT_HANDLE(GetProcessService());
+    struct vali_link_message msg = VALI_MSG_INIT_HANDLE(ServiceGetProcess());
     uint32_t                 moduleCount = PROCESS_MAXMODULES;
 
     // Initialize it to 0

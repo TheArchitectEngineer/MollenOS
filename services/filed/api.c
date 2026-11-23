@@ -25,7 +25,7 @@
 #include <ddk/convert.h>
 #include <ddk/convert/grants.h>
 #include <ddk/utils.h>
-#include <internal/_service.h>
+#include <ddk/service-caller.h>
 #include <os/grants.h>
 #include <os/types/file.h>
 #include <stdlib.h>
@@ -61,7 +61,7 @@ sys_file_open_invocation(
     }
 
     caller = gracht_server_get_security_context(message);
-    if (!__IsAuthenticatedCaller(caller)) {
+    if (!ServiceIsAuthenticatedCaller(caller)) {
         sys_file_open_response(message, OS_EPERMISSIONS, &wireToken);
         return;
     }

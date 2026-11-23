@@ -22,7 +22,7 @@
 #include <os/mollenos.h>
 
 oserr_t
-QueryBootVideoInformation(
+BootVideoQuery(
     _In_ OSBootVideoDescriptor_t* descriptor)
 {
     size_t bytesQueried;
@@ -36,7 +36,7 @@ QueryBootVideoInformation(
 }
 
 void*
-CreateDisplayFramebuffer(void)
+BootVideoMapFramebuffer(void)
 {
     void*   framebuffer;
     oserr_t oserr;

@@ -24,7 +24,7 @@
 #ifndef __DEVICED_RP1_H__
 #define __DEVICED_RP1_H__
 
-#include <ddk/resources.h>
+#include <ddk/devices/resources.h>
 #include <os/types/device.h>
 #include <os/usched/mutex.h>
 #include <stdatomic.h>

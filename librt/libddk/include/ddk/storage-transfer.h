@@ -14,10 +14,13 @@
  * You should have received a copy of the GNU General Public License
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  *
+ * Sector transfers between an SHM buffer and a storage driver. filed and the
+ * filesystem modules send them with StorageTransfer, and a storage driver
+ * attaches to the buffer of a request with StorageAttachTransfer.
  */
 
-#ifndef __DDK_INTERNAL_STORAGE_H__
-#define __DDK_INTERNAL_STORAGE_H__
+#ifndef __DDK_STORAGE_TRANSFER_H__
+#define __DDK_STORAGE_TRANSFER_H__
 
 #include <ddk/convert/grants.h>
 #include <os/shm.h>
@@ -33,7 +36,7 @@
  * as the wait between attempts puts the job to sleep.
  */
 oserr_t
-__StorageTransfer(
+StorageTransfer(
     _In_  uuid_t              driverID,
     _In_  uuid_t              deviceID,
     _In_  uuid_t              bufferID,
@@ -50,7 +53,7 @@ __StorageTransfer(
  * set up its own mapping or reference to the memory, or once CPU access is done.
  */
 static inline oserr_t
-__StorageAttachTransfer(
+StorageAttachTransfer(
     _In_  const struct sys_shm_transfer* description,
     _In_  size_t                         sectorSize,
     _In_  size_t                         count,
@@ -84,4 +87,4 @@ __StorageAttachTransfer(
     return status;
 }
 
-#endif //!__DDK_INTERNAL_STORAGE_H__
+#endif //!__DDK_STORAGE_TRANSFER_H__

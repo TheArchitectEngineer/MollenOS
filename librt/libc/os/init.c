@@ -226,7 +226,7 @@ __get_startup_info(void)
     OSHandle_t               mapping;
     SHMTransfer_t            transfer;
     struct sys_shm_transfer  destination;
-    struct vali_link_message msg = VALI_MSG_INIT_HANDLE(GetProcessService());
+    struct vali_link_message msg = VALI_MSG_INIT_HANDLE(ServiceGetProcess());
     uuid_t                   processID = UUID_INVALID;
     uint32_t                 bytesWritten = 0;
     oserr_t                  oserr;

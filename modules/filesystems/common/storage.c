@@ -24,7 +24,7 @@
 #include <gracht/link/vali.h>
 #include <internal/_gracht.h>
 #include <internal/_utils.h>
-#include <internal/_storage.h>
+#include <ddk/storage-transfer.h>
 #include <os/services/process.h>
 #include <os/services/file.h>
 #include <stdio.h>
@@ -135,7 +135,7 @@ __StatFile(
         _In_ uuid_t               handleID,
         _In_ StorageDescriptor_t* stats)
 {
-    struct vali_link_message   msg  = VALI_MSG_INIT_HANDLE(GetFileService());
+    struct vali_link_message   msg  = VALI_MSG_INIT_HANDLE(ServiceGetFile());
     oserr_t                    osStatus;
     struct sys_file_descriptor fstats;
 
@@ -161,7 +161,7 @@ __StatFile(
     }
 
     // Use the file size and handle to describe the storage.
-    stats->DriverID = GetFileService();
+    stats->DriverID = ServiceGetFile();
     stats->DeviceID = handleID;
     stats->SectorCount = fstats.size / 512;
     stats->SectorSize  = 512; // TODO this can change in the future
@@ -200,7 +200,7 @@ FSStorageRead(
 
     switch (storageParameters->StorageType) {
         case VFSSTORAGE_TYPE_DEVICE: {
-            return __StorageTransfer(
+            return StorageTransfer(
                     storageParameters->Storage.Device.DriverID,
                     storageParameters->Storage.Device.DeviceID,
                     buffer,
@@ -243,7 +243,7 @@ FSStorageWrite(
 
     switch (storageParameters->StorageType) {
         case VFSSTORAGE_TYPE_DEVICE: {
-            return __StorageTransfer(
+            return StorageTransfer(
                     storageParameters->Storage.Device.DriverID,
                     storageParameters->Storage.Device.DeviceID,
                     buffer,

@@ -244,7 +244,7 @@ PmGetProcessStartupInformation(
     size_t     capacity;
     oserr_t    oserr;
 
-    if (!__IsAuthenticatedCaller(caller)) {
+    if (!ServiceIsAuthenticatedCaller(caller)) {
         return OS_EPERMISSIONS;
     }
 

@@ -126,13 +126,13 @@ __EthernetWrite(
     uint32_t    offset = g_ethernetOffsets[index];
     oserr_t     status;
 
-    status = WriteDeviceIo(io, offset, value, 4);
+    status = DeviceIoWrite(io, offset, value, 4);
     if (status != OS_EOK) {
         return status;
     }
     // Verify the register through the same mapping before reporting success.
-    // WriteDeviceIo returning OS_EOK only confirms the I/O write.
-    return ReadDeviceIo(io, offset, 4) == value ? OS_EOK : OS_EUNKNOWN;
+    // DeviceIoWrite returning OS_EOK only confirms the I/O write.
+    return DeviceIoRead(io, offset, 4) == value ? OS_EOK : OS_EUNKNOWN;
 }
 
 oserr_t
@@ -228,7 +228,7 @@ __EthernetMap(
 
     // Keep the handle if mapping fails. Release uses the handle and Mapped
     // flag to determine which resources need cleanup.
-    status = AcquireDeviceIo(&state->Io[index]);
+    status = DeviceIoAcquire(&state->Io[index]);
     if (status == OS_EOK) {
         state->Mapped[index] = 1;
     }
@@ -338,29 +338,29 @@ __EthernetClocks(
     // Firmware must have set up the shared 1 GHz SYS PLL and its 125 MHz
     // secondary output. Check both before using them for Ethernet, since
     // changing this PLL would also change clocks used by other children.
-    if ((ReadDeviceIo(io, 0x8000, 4) & 0x8000003fU) != 0x80000001U ||
-        (ReadDeviceIo(io, 0x8004, 4) & 0x29U) != 0) {
+    if ((DeviceIoRead(io, 0x8000, 4) & 0x8000003fU) != 0x80000001U ||
+        (DeviceIoRead(io, 0x8004, 4) & 0x29U) != 0) {
         return OS_ENOTSUPPORTED;
     }
 
-    if (ReadDeviceIo(io, 0x8008, 4) != 20 || ReadDeviceIo(io, 0x800c, 4) != 0 ||
-        (ReadDeviceIo(io, 0x8014, 4) & 0x11f00U) != 0x800U) {
+    if (DeviceIoRead(io, 0x8008, 4) != 20 || DeviceIoRead(io, 0x800c, 4) != 0 ||
+        (DeviceIoRead(io, 0x8014, 4) & 0x11f00U) != 0x800U) {
         return OS_ENOTSUPPORTED;
     }
 
-    primary = (uint32_t)ReadDeviceIo(io, 0x8010, 4);
+    primary = (uint32_t)DeviceIoRead(io, 0x8010, 4);
     if (((primary >> 16) & 7U) * ((primary >> 12) & 7U) != 5) {
         return OS_ENOTSUPPORTED;
     }
 
-    if ((ReadDeviceIo(io, 0x14, 4) & 3U) != 2 || ReadDeviceIo(io, 0x18, 4) != 1) {
+    if ((DeviceIoRead(io, 0x14, 4) & 3U) != 2 || DeviceIoRead(io, 0x18, 4) != 1) {
         return OS_ENOTSUPPORTED;
     }
 
     // Save all affected values before the first change so stop and partial
     // setup failures can restore the firmware's clock configuration.
     for (i = 0; i < 4; i++) {
-        state->Original[i] = (uint32_t)ReadDeviceIo(io, g_ethernetOffsets[i], 4);
+        state->Original[i] = (uint32_t)DeviceIoRead(io, g_ethernetOffsets[i], 4);
     }
 
     // Both auxiliary muxes select input zero: SYS secondary for ETH, XOSC for TSU.
@@ -417,8 +417,8 @@ __EthernetResetPhy(
     // Save pin settings only on the first reset. Later resets must not replace
     // the original board state with values from an earlier pulse.
     if (state->Changed == 4) {
-        state->Original[4] = (uint32_t)ReadDeviceIo(&state->Io[2], 0x4014, 4);
-        state->Original[5] = (uint32_t)ReadDeviceIo(&state->Io[1], 0x4024, 4);
+        state->Original[4] = (uint32_t)DeviceIoRead(&state->Io[2], 0x4014, 4);
+        state->Original[5] = (uint32_t)DeviceIoRead(&state->Io[1], 0x4024, 4);
     }
 
     // Enable the pad and force output low, then high. Preserve input/IRQ settings.
@@ -464,7 +464,7 @@ Rp1EthernetControl(
     _In_    size_t              length)
 {
     struct Rp1Ethernet*   state = child->Ethernet;
-    enum DeviceActivation stage;
+    enum DeviceStage      stage;
     oserr_t               status;
     oserr_t               cleanup;
 
@@ -501,7 +501,7 @@ Rp1EthernetControl(
         return OS_EINVALPARAMS;
     }
 
-    stage = *(const enum DeviceActivation*)buffer;
+    stage = *(const enum DeviceStage*)buffer;
     // Stop remains available while the bus is shutting down, so clients can
     // release their setup. New preparation and start requests are blocked below.
     if (stage == DeviceStop) {

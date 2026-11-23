@@ -51,7 +51,7 @@ VirtioBlkDeviceRegisterStorage(
     
     TRACE("VirtioBlkDeviceRegisterStorage(device=%u)", device->Descriptor.DeviceID);
     
-    message = (struct vali_link_message)VALI_MSG_INIT_HANDLE(GetFileService());
+    message = (struct vali_link_message)VALI_MSG_INIT_HANDLE(ServiceGetFile());
     // The device must be in the lookup collection and have DRIVER_OK set before
     // we register it. filed queries the descriptor immediately and may start
     // partition I/O as soon as it receives this message.
@@ -89,7 +89,7 @@ static void
 __UnregisterStorage(
     _In_ VirtioBlkDevice_t* device)
 {
-    struct vali_link_message message = VALI_MSG_INIT_HANDLE(GetFileService());
+    struct vali_link_message message = VALI_MSG_INIT_HANDLE(ServiceGetFile());
     int                      status;
 
     if (!device->Registered) {

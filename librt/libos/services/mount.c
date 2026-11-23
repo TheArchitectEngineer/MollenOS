@@ -31,7 +31,7 @@ OSMount(
         _In_ const char*  type,
         _In_ unsigned int flags)
 {
-    struct vali_link_message msg = VALI_MSG_INIT_HANDLE(GetFileService());
+    struct vali_link_message msg = VALI_MSG_INIT_HANDLE(ServiceGetFile());
     oserr_t                  status;
 
     sys_mount_mount(
@@ -52,7 +52,7 @@ oserr_t
 OSUnmount(
         _In_ const char* path)
 {
-    struct vali_link_message msg = VALI_MSG_INIT_HANDLE(GetFileService());
+    struct vali_link_message msg = VALI_MSG_INIT_HANDLE(ServiceGetFile());
     oserr_t                  status;
 
     sys_mount_unmount(
