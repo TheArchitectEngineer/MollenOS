@@ -15,14 +15,14 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  *
  * Wrapper for OSIOCTLREQUEST_FIRMWARE_NODE, and the checks and accessors for
- * the description it returns. The layout is described in ddk/firmware_node.h.
+ * the description it returns. The layout is described in ddk/devices/firmware-node.h.
  *
  * Logging: every refused answer or description is logged once, with the
  * values that failed the check. An accessor logs only a malformed property.
  * An absent property is a normal answer and is not logged.
  */
 
-#include <ddk/firmware_node.h>
+#include <ddk/devices/firmware-node.h>
 #include <ddk/utils.h>
 #include <os/device.h>
 #include <stdlib.h>

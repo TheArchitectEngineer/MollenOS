@@ -31,7 +31,21 @@ struct VaFsReaderConfiguration;
  * @param[Out] configuration The reader configuration to initialize.
  */
 DDKDECL(void,
-DdkInitrdConfigureVafsReader(
+InitrdConfigureVafsReader(
     _Out_ struct VaFsReaderConfiguration* configuration));
+
+/**
+ * @brief Maps the boot ramdisk (initrd) into the memory space of the caller.
+ * The mapping can be released again with MemoryFree.
+ *
+ * @param bufferOut       Receives the address of the ramdisk.
+ * @param bufferLengthOut Receives the size of the ramdisk in bytes.
+ * @return OS_EOK on success, OS_EINVALPARAMS for a missing output pointer,
+ *         or an error from the kernel.
+ */
+DDKDECL(oserr_t,
+InitrdMap(
+    _Out_ void**  bufferOut,
+    _Out_ size_t* bufferLengthOut));
 
 #endif //!__DDK_INITRD_H__

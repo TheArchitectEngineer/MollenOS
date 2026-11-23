@@ -122,7 +122,7 @@ struct DeviceEthernetConfiguration {
  * @return OS_EOK on success, or a firmware, transport or unsupported-topology error.
  */
 DDKDECL(oserr_t,
-DeviceGetEthernetConfiguration(
+DeviceEthernetGetConfiguration(
     _In_  uuid_t                              device,
     _Out_ struct DeviceEthernetConfiguration* configuration));
 
@@ -134,7 +134,7 @@ DeviceGetEthernetConfiguration(
  *         or register-access error.
  */
 DDKDECL(oserr_t,
-DeviceResetEthernetPhy(
+DeviceEthernetResetPhy(
     _In_ uuid_t device));
 
 _CODE_END

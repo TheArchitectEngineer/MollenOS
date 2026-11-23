@@ -27,7 +27,7 @@
 
 #include <ddk/ddkdefs.h>
 
-#define __DEVICEMANAGER_NAMEBUFFER_LENGTH 64
+#define DEVICEMANAGER_NAMEBUFFER_LENGTH 64
 
 #define DEVICE_REGISTER_FLAG_LOADDRIVER 0x00000001
 
@@ -53,19 +53,19 @@ typedef struct Device {
     unsigned int Subclass;
 } Device_t;
 
-/* RegisterDevice
+/* DeviceRegister
  * Allows registering of a new device in the
  * device-manager, and automatically queries for a driver for the new device */
 DDKDECL(uuid_t,
-RegisterDevice(
+DeviceRegister(
     _In_ Device_t*    device,
     _In_ unsigned int flags));
 
-/* UnregisterDevice
+/* DeviceUnregister
  * Allows removal of a device in the device-manager, and automatically 
  * unloads drivers for the removed device */
 DDKDECL(oserr_t,
-UnregisterDevice(
+DeviceUnregister(
         _In_ uuid_t deviceId));
 
 #endif //!__DDK_DEVICE_H__

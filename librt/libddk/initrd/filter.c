@@ -62,7 +62,7 @@ static struct VaFsCodec g_initrdCodecs[] = {
     { .ID = "aplib", .Decode = __aplib_decode }
 };
 
-void DdkInitrdConfigureVafsReader(struct VaFsReaderConfiguration* configuration)
+void InitrdConfigureVafsReader(struct VaFsReaderConfiguration* configuration)
 {
     vafs_reader_config_initialize(configuration);
     vafs_reader_config_set_codecs(configuration, g_initrdCodecs, 1);

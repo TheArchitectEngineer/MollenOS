@@ -18,21 +18,22 @@
  * DMA Region Session Implementation
  */
 
-#include "private.h"
-#include <ddk/dma_region.h>
+#include <ddk/dma/region.h>
 #include <ddk/utils.h>
 #include <internal/_syscalls.h>
 #include <assert.h>
 #include <limits.h>
 #include <stdlib.h>
 
-enum __DmaRegionSessionState {
+#include "private.h"
+
+enum __DMARegionSessionState {
     // Slots can be initialized and uses can begin.
-    DmaRegionSessionStateOpen,
+    DMARegionSessionStateOpen,
     // DMARegionSessionClose has started to release the kernel handle. If the
     // release fails, the session stays in this state until the close is tried
     // again and succeeds.
-    DmaRegionSessionStateClosing
+    DMARegionSessionStateClosing
 };
 
 struct DMARegionSession {
@@ -46,8 +47,8 @@ struct DMARegionSession {
     uint32_t                     SegmentCount;
     // Count of currently active DMARegionUse_t records on this session.
     unsigned int                 Active;
-    // See enum __DmaRegionSessionState.
-    enum __DmaRegionSessionState State;
+    // See enum __DMARegionSessionState.
+    enum __DMARegionSessionState State;
     // Bitmap tracking which slot indices have already been bound via DMARegionUseInitialize.
     unsigned char                Initialized[];
 };
@@ -64,7 +65,7 @@ DMAMapSHMRegions(
 {
     // Region mappings always map the original SHM pages directly without a bounce
     // buffer, and sync access per region session instead of mapping-wide.
-    return __DmaMapSHM(
+    return __DMAMapSHM(
         context,
         buffer,
         offset,
@@ -131,7 +132,7 @@ DMARegionSessionOpen(
         return OS_EINVALPARAMS;
     }
 
-    if (*sessionOut != NULL || mapping->State != DmaMappingStateMapped) {
+    if (*sessionOut != NULL || mapping->State != DMAMappingStateMapped) {
         return OS_EBUSY;
     }
 
@@ -204,7 +205,7 @@ DMARegionUseInitialize(
     // Each slot index may only belong to one DMARegionUse_t record so two
     // callers cannot share a kernel slot and corrupt its generation counter.
     mask = (unsigned char)(1U << (slot % 8));
-    if (session->State != DmaRegionSessionStateOpen || use->Session != NULL ||
+    if (session->State != DMARegionSessionStateOpen || use->Session != NULL ||
         (session->Initialized[slot / 8] & mask) != 0) {
         return OS_EBUSY;
     }
@@ -219,7 +220,7 @@ DMARegionUseInitialize(
 }
 
 oserr_t
-DMATryBeginRegionUse(
+DMARegionUseTryBegin(
     _InOut_ DMARegionUse_t*   use,
     _In_    enum DMADirection direction)
 {
@@ -232,7 +233,7 @@ DMATryBeginRegionUse(
     }
 
     session = use->Session;
-    if (use->Active || session->State != DmaRegionSessionStateOpen) {
+    if (use->State != DMARegionUseStateIdle || session->State != DMARegionSessionStateOpen) {
         return OS_EBUSY;
     }
 
@@ -242,7 +243,7 @@ DMATryBeginRegionUse(
         return OS_EOVERFLOW;
     }
 
-    // Advance Generation and Active only after the kernel accepts the begin, so
+    // Advance Generation and State only after the kernel accepts the begin, so
     // any error leaves the record unchanged for a retry or teardown.
     status = Syscall_DmaRegionBeginUse(
         session->Kernel.Handle,
@@ -252,21 +253,21 @@ DMATryBeginRegionUse(
     );
     if (status == OS_EOK) {
         use->Generation++;
-        use->Active = true;
+        use->State = DMARegionUseStateActive;
         session->Active++;
     }
     return status;
 }
 
 oserr_t
-DMAEndRegionUse(
+DMARegionUseEnd(
     _InOut_ DMARegionUse_t* use,
     _Out_   oserr_t*        resultOut)
 {
     DMARegionSession_t* session;
     oserr_t              status;
 
-    if (use == NULL || !use->Active || use->Session == NULL || resultOut == NULL) {
+    if (use == NULL || use->State != DMARegionUseStateActive || use->Session == NULL || resultOut == NULL) {
         return OS_EINVALPARAMS;
     }
 
@@ -286,7 +287,7 @@ DMAEndRegionUse(
     *resultOut = status;
 
     // Mark the use as inactive and decrement the session's active count.
-    use->Active = false;
+    use->State = DMARegionUseStateIdle;
     assert(session->Active != 0);
     session->Active--;
     return OS_EOK;
@@ -311,7 +312,7 @@ DMARegionSessionClose(
 
     // Mark closing before releasing the kernel handle so failed closes block new
     // slot initialization or begins while the caller retries close.
-    current->State = DmaRegionSessionStateClosing;
+    current->State = DMARegionSessionStateClosing;
     status = Syscall_ResourceRelease(current->Kernel.Handle);
     if (status != OS_EOK) {
         WARNING("DMARegionSessionClose: session %u, buffer %u region %u close failed: %u",

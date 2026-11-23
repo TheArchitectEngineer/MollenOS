@@ -33,6 +33,14 @@ _CODE_BEGIN
  */
 typedef struct DMARegionSession DMARegionSession_t;
 
+// Whether a transfer is running on a DMARegionUse_t slot.
+enum DMARegionUseState {
+    // No transfer is running on the slot. This is the state of a zeroed record.
+    DMARegionUseStateIdle,
+    // DMARegionUseTryBegin succeeded and DMARegionUseEnd has not ended it yet.
+    DMARegionUseStateActive
+};
+
 /**
  * @brief Tracks one reusable transfer slot inside a DMA region session.
  *
@@ -50,13 +58,13 @@ typedef struct DMARegionSession DMARegionSession_t;
  */
 typedef struct DMARegionUse {
     // Session this slot belongs to. NULL before initialization.
-    DMARegionSession_t* Session;
+    DMARegionSession_t*    Session;
     // Zero-based index of this slot within the session's kernel table.
-    unsigned int        Slot;
+    unsigned int           Slot;
     // Number of times this slot has been started. Advanced on each begin.
-    unsigned int        Generation;
-    // True from a successful DMATryBeginRegionUse until DMAEndRegionUse ends it.
-    bool                Active;
+    unsigned int           Generation;
+    // See enum DMARegionUseState.
+    enum DMARegionUseState State;
 } DMARegionUse_t;
 
 /**
@@ -136,7 +144,7 @@ DMARegionSessionOpen(
  *
  * The pointer stays valid until DMARegionSessionClose succeeds or the device
  * binding is revoked during recovery. Even though the addresses never move, you
- * must still get a successful DMATryBeginRegionUse before pointing hardware at
+ * must still get a successful DMARegionUseTryBegin before pointing hardware at
  * them so caches and conflicts are handled first.
  *
  * @param session Open region session.
@@ -195,7 +203,7 @@ DMARegionUseInitialize(
  * @return OS_EOK on success, or one of the errors listed above.
  */
 DDKDECL(oserr_t,
-DMATryBeginRegionUse(
+DMARegionUseTryBegin(
     _InOut_ DMARegionUse_t* use,
     _In_    enum DMADirection direction));
 
@@ -215,18 +223,18 @@ DMATryBeginRegionUse(
  * retry.
  *
  * If a job touches several regions or signals a completion fence to callers, wait
- * until DMAEndRegionUse succeeds for every region before signaling that fence.
- * If signaling the fence fails and needs a retry, do not call DMAEndRegionUse
+ * until DMARegionUseEnd succeeds for every region before signaling that fence.
+ * If signaling the fence fails and needs a retry, do not call DMARegionUseEnd
  * again for slots that already ended.
  *
- * @param use Active use record returned by DMATryBeginRegionUse.
+ * @param use Active use record returned by DMARegionUseTryBegin.
  * @param resultOut Receives OS_EOK or OS_EDEVFAULT when the call returns OS_EOK.
  * Unchanged if the call returns any other error.
  * @return OS_EOK if the slot is now idle, OS_EINVALPARAMS for invalid arguments
  * or an inactive slot, or a kernel error to retry on.
  */
 DDKDECL(oserr_t,
-DMAEndRegionUse(
+DMARegionUseEnd(
     _InOut_ DMARegionUse_t* use,
     _Out_   oserr_t*        resultOut));
 

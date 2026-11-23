@@ -48,23 +48,23 @@ enum OSIOCtlRequest {
     // Lets the device work as a GPIO and or clock controller for other devices.
     // deviced may then send its driver GPIO and clock controller requests. The
     // device must be prepared first. The argument is a DeviceControllerRequest
-    // from ddk/controller.h.
+    // from ddk/devices/controller.h.
     OSIOCTLREQUEST_CONTROLLER_ENABLE   = 9,
     // Stops the device from working as a GPIO and or clock controller. The
-    // argument is a DeviceControllerRequest from ddk/controller.h.
+    // argument is a DeviceControllerRequest from ddk/devices/controller.h.
     OSIOCTLREQUEST_CONTROLLER_DISABLE  = 10,
     // Runs one supply operation for a named supply of the device: opt out of
     // the default switch-on, switch it, or read or set its voltage. The
-    // argument is a DeviceSupplyRequest from ddk/supply.h, and the answer is
+    // argument is a DeviceSupplyRequest from ddk/devices/supply.h, and the answer is
     // written back into it.
     OSIOCTLREQUEST_SUPPLY_CONTROL      = 11 | __IOCTL_IN,
     // Reads the rate of one clock of a prepared device. The argument is a
-    // DeviceClockRequest from ddk/clock.h, and the rate is written back into it.
+    // DeviceClockRequest from ddk/devices/clock.h, and the rate is written back into it.
     OSIOCTLREQUEST_CLOCK_RATE          = 12 | __IOCTL_IN,
     // Returns one chunk of the firmware description of the device's own node:
     // its properties and its direct children. Does not touch the hardware, so
     // it works before the device is prepared. The argument is a
-    // DeviceFirmwareNodeRequest from ddk/firmware_node.h.
+    // DeviceFirmwareNodeRequest from ddk/devices/firmware-node.h.
     OSIOCTLREQUEST_FIRMWARE_NODE       = 13 | __IOCTL_IN
 };
 

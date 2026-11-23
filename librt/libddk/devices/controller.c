@@ -17,7 +17,7 @@
  * Wrappers for OSIOCTLREQUEST_CONTROLLER_ENABLE and OSIOCTLREQUEST_CONTROLLER_DISABLE.
  */
 
-#include <ddk/controller.h>
+#include <ddk/devices/controller.h>
 #include <os/device.h>
 
 static int

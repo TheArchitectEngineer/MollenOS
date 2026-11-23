@@ -21,11 +21,11 @@
  * the bus of its device to reset the PHY.
  */
 
-#include <ddk/ethernet.h>
+#include <ddk/devices/ethernet.h>
 #include <os/device.h>
 
 oserr_t
-DeviceGetEthernetConfiguration(
+DeviceEthernetGetConfiguration(
     _In_  uuid_t                              device,
     _Out_ struct DeviceEthernetConfiguration* configuration)
 {
@@ -60,7 +60,7 @@ DeviceGetEthernetConfiguration(
 }
 
 oserr_t
-DeviceResetEthernetPhy(
+DeviceEthernetResetPhy(
     _In_ uuid_t device)
 {
     // The wire request requires a zero word even though reset has no arguments.

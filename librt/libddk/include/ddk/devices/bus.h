@@ -28,23 +28,23 @@
 #include <ddk/devices/device.h>
 #include <ddk/io.h>
 
-#define __DEVICEMANAGER_MAX_IOSPACES 6
-#define __DEVICEMANAGER_IOSPACE_END  (int)-1
+#define DEVICEMANAGER_MAX_IOSPACES 6
+#define DEVICEMANAGER_IOSPACE_END  (int)-1
 
-#define __DEVICEMANAGER_IOCTL_BUS    0x00000000
-#define __DEVICEMANAGER_IOCTL_EXT    0x00000001
+#define DEVICEMANAGER_IOCTL_BUS    0x00000000
+#define DEVICEMANAGER_IOCTL_EXT    0x00000001
 
 // Ioctl-Bus Specific Flags
-#define __DEVICEMANAGER_IOCTL_ENABLE            0x00000001
-#define __DEVICEMANAGER_IOCTL_IO_ENABLE         0x00000002
-#define __DEVICEMANAGER_IOCTL_MMIO_ENABLE       0x00000004
-#define __DEVICEMANAGER_IOCTL_BUSMASTER_ENABLE  0x00000008
-#define __DEVICEMANAGER_IOCTL_FASTBTB_ENABLE    0x00000010  // Fast Back-To-Back
-#define __DEVICEMANAGER_IOCTL_MEMWRTINVD_ENABLE 0x00000020
+#define DEVICEMANAGER_IOCTL_ENABLE            0x00000001
+#define DEVICEMANAGER_IOCTL_IO_ENABLE         0x00000002
+#define DEVICEMANAGER_IOCTL_MMIO_ENABLE       0x00000004
+#define DEVICEMANAGER_IOCTL_BUSMASTER_ENABLE  0x00000008
+#define DEVICEMANAGER_IOCTL_FASTBTB_ENABLE    0x00000010  // Fast Back-To-Back
+#define DEVICEMANAGER_IOCTL_MEMWRTINVD_ENABLE 0x00000020
 
 // Ioctl-Ext Specific Flags
-#define __DEVICEMANAGER_IOCTL_EXT_WRITE        0x00000000
-#define __DEVICEMANAGER_IOCTL_EXT_READ         0x80000000
+#define DEVICEMANAGER_IOCTL_EXT_WRITE        0x00000000
+#define DEVICEMANAGER_IOCTL_EXT_READ         0x80000000
 
 // Values match sys.bus_type in the device protocol.
 typedef enum BusType {
@@ -57,7 +57,7 @@ typedef enum BusType {
 // can be used to control the bus-device
 typedef struct BusDevice {
     Device_t     Base;
-    DeviceIo_t   IoSpaces[__DEVICEMANAGER_MAX_IOSPACES];
+    DeviceIo_t   IoSpaces[DEVICEMANAGER_MAX_IOSPACES];
     int          InterruptLine;
     int          InterruptPin;
     unsigned int InterruptAcpiConform;
@@ -74,7 +74,7 @@ typedef struct BusDevice {
  * @param direction [In] 0 (Read), 1 (Write)
  */
 DDKDECL(oserr_t,
-IoctlDeviceEx(
+DeviceIoctlEx(
         _In_    uuid_t       deviceId,
         _In_    int          direction,
         _In_    unsigned int offset,

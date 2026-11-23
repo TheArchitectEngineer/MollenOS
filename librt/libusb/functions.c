@@ -39,10 +39,10 @@
 #include <ctt_usbhost_service_client.h>
 #include <ctt_usbhub_service_client.h>
 
-static _Atomic(uuid_t)  TransferIdGenerator      = 1;
-static const size_t     LIBUSB_SHAREDBUFFER_SIZE = 0x2000;
-static struct dma_pool* g_dmaPool                = NULL;
-static OSHandle_t       g_shmHandle;
+static _Atomic(uuid_t) TransferIdGenerator      = 1;
+static const size_t    LIBUSB_SHAREDBUFFER_SIZE = 0x2000;
+static BufferPool_t*   g_dmaPool                = NULL;
+static OSHandle_t      g_shmHandle;
 
 oserr_t
 UsbInitialize(void)
@@ -64,7 +64,7 @@ UsbInitialize(void)
         return oserr;
     }
 
-    oserr = dma_pool_create(&g_shmHandle, &g_dmaPool);
+    oserr = BufferPoolCreate(&g_shmHandle, &g_dmaPool);
     if (oserr != OS_EOK) {
         OSHandleDestroy(&g_shmHandle);
     }
@@ -78,12 +78,12 @@ UsbCleanup(void)
         return;
     }
 
-    dma_pool_destroy(g_dmaPool);
+    BufferPoolDestroy(g_dmaPool);
     OSHandleDestroy(&g_shmHandle);
     g_dmaPool = NULL;
 }
 
-struct dma_pool*
+BufferPool_t*
 UsbRetrievePool(void)
 {
     return g_dmaPool;
@@ -405,7 +405,7 @@ UsbExecutePacket(
     USBTransfer_t        transfer;
     oserr_t              oserr;
 
-    oserr = dma_pool_allocate(g_dmaPool, sizeof(usb_packet_t) + length, &dmaStorage);
+    oserr = BufferPoolAllocate(g_dmaPool, sizeof(usb_packet_t) + length, &dmaStorage);
     if (oserr != OS_EOK) {
         ERROR("UsbExecutePacket: failed to allocate a transfer buffer");
         return USBTRANSFERCODE_INVALID;
@@ -441,8 +441,8 @@ UsbExecutePacket(
             USBTRANSFER_TYPE_CONTROL,
             dataDirection,
             0,
-            dma_pool_handle(g_dmaPool),
-            dma_pool_offset(g_dmaPool, dmaStorage),
+            BufferPoolHandle(g_dmaPool),
+            BufferPoolOffset(g_dmaPool, dmaStorage),
             sizeof(usb_packet_t) + length
     );
 
@@ -457,7 +457,7 @@ UsbExecutePacket(
         memcpy(buffer, ((char*)dmaStorage + sizeof(usb_packet_t)), length);
     }
 
-    dma_pool_free(g_dmaPool, dmaStorage);
+    BufferPoolFree(g_dmaPool, dmaStorage);
     return transferStatus;
 }
 

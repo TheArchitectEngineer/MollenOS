@@ -27,8 +27,8 @@
 
 #include <ddk/ddkdefs.h>
 
-#define __STORAGE_OPERATION_READ            0x00000001
-#define __STORAGE_OPERATION_WRITE           0x00000002
+#define STORAGE_OPERATION_READ            0x00000001
+#define STORAGE_OPERATION_WRITE           0x00000002
 
 typedef struct StorageDescriptor {
     uuid_t       DeviceID;

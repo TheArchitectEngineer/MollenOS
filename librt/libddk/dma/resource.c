@@ -27,8 +27,8 @@
 #include "private.h"
 
 oserr_t
-__DmaRelease(
-    _In_ struct __DmaResource* resource)
+__DMARelease(
+    _In_ struct __DMAResource* resource)
 {
     oserr_t status;
 
@@ -39,7 +39,7 @@ __DmaRelease(
     if (resource->Handle != UUID_INVALID) {
         status = Syscall_ResourceRelease(resource->Handle);
         if (status != OS_EOK) {
-            WARNING("__DmaRelease: mapping %u release failed (%u), the resource is kept", resource->Handle, status);
+            WARNING("__DMARelease: mapping %u release failed (%u), the resource is kept", resource->Handle, status);
             return status;
         }
         resource->Handle = UUID_INVALID;
@@ -48,7 +48,7 @@ __DmaRelease(
     if (resource->Storage != NULL) {
         status = Syscall_SHMDetach(resource->Storage);
         if (status != OS_EOK) {
-            WARNING("__DmaRelease: buffer %u detach failed (%u), the resource is kept",
+            WARNING("__DMARelease: buffer %u detach failed (%u), the resource is kept",
                     resource->Storage->ID, status);
             return status;
         }
@@ -61,11 +61,11 @@ __DmaRelease(
 }
 
 oserr_t
-__DmaCollect(
+__DMACollect(
     _In_ struct DMAContext* context)
 {
-    struct __DmaResource* resource;
-    struct __DmaResource* next;
+    struct __DMAResource* resource;
+    struct __DMAResource* next;
     oserr_t               status;
 
     // Only failed creations end up on this list, so transfers never walk it.
@@ -74,7 +74,7 @@ __DmaCollect(
         resource = context->Pending;
         next = resource->Next;
 
-        status = __DmaRelease(resource);
+        status = __DMARelease(resource);
         if (status != OS_EOK) {
             return status;
         }
@@ -84,8 +84,8 @@ __DmaCollect(
 }
 
 oserr_t
-__DmaPrepareResource(
-    _In_ struct __DmaResource*            resource,
+__DMAPrepareResource(
+    _In_ struct __DMAResource*            resource,
     _In_ struct DMAContext*               context,
     _In_ const struct OSDmaMappingResult* result)
 {
@@ -139,15 +139,15 @@ rollback:
     // No driver has seen this mapping yet, so hardware cannot be using it. If
     // cleanup fails, keep the resource on the context so DMAClose can retry it.
     WARNING("DMA: segment setup failed (%u); rolling back mapping %u", status, resource->Handle);
-    if (__DmaRelease(resource) != OS_EOK) {
-        __DmaDeferCleanup(resource);
+    if (__DMARelease(resource) != OS_EOK) {
+        __DMADeferCleanup(resource);
     }
     return status;
 }
 
 const struct DMASegment*
-__DmaSegments(
-    _In_  const struct __DmaResource* resource,
+__DMASegments(
+    _In_  const struct __DMAResource* resource,
     _Out_ uint32_t*                   countOut)
 {
     // Both the inline segment and the segment array are set up before the

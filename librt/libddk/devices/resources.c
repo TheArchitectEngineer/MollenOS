@@ -21,7 +21,7 @@
  * when the device is prepared, started and stopped.
  */
 
-#include <ddk/resources.h>
+#include <ddk/devices/resources.h>
 #include <os/device.h>
 
 oserr_t

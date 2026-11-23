@@ -20,7 +20,7 @@
  */
 
 #include <ddk/utils.h>
-#include <ddk/dma_region.h>
+#include <ddk/dma/region.h>
 #include <os/shm.h>
 #include <internal/_shm.h>
 #include <os/types/syscall.h>
@@ -31,7 +31,7 @@
 _Static_assert(offsetof(struct DMAMapping, Resource) == 0, "Resource release frees the mapping");
 
 oserr_t
-__DmaMapSHM(
+__DMAMapSHM(
     _In_    struct DMAContext*               context,
     _In_    const OSHandle_t*                buffer,
     _In_    size_t                           offset,
@@ -63,7 +63,7 @@ __DmaMapSHM(
         return OS_EINVALPARAMS;
     }
 
-    if (*mappingOut != NULL || context->State != DmaContextStateOpen) {
+    if (*mappingOut != NULL || context->State != DMAContextStateOpen) {
         return OS_EBUSY;
     }
 
@@ -97,7 +97,7 @@ __DmaMapSHM(
         return status;
     }
 
-    status = __DmaPrepareResource(&mapping->Resource, context, &result);
+    status = __DMAPrepareResource(&mapping->Resource, context, &result);
     if (status != OS_EOK) {
         return status;
     }
@@ -119,7 +119,7 @@ DMAMapSHM(
     _In_    const struct DMAMapRequirements* requirements,
     _InOut_ struct DMAMapping**              mappingOut)
 {
-    return __DmaMapSHM(
+    return __DMAMapSHM(
         context,
         buffer,
         offset,
@@ -141,7 +141,7 @@ DMAMapSHMDirect(
     _In_    const struct DMAMapRequirements* requirements,
     _InOut_ struct DMAMapping**              mappingOut)
 {
-    return __DmaMapSHM(
+    return __DMAMapSHM(
         context,
         buffer,
         offset,
@@ -163,7 +163,7 @@ DMAMapSHMPersistent(
     _In_    const struct DMAMapRequirements* requirements,
     _InOut_ struct DMAMapping**              mappingOut)
 {
-    return __DmaMapSHM(
+    return __DMAMapSHM(
         context,
         buffer,
         offset,
@@ -180,11 +180,11 @@ DMAMappingSegments(
     _In_  const struct DMAMapping* mapping,
     _Out_ uint32_t*                countOut)
 {
-    return __DmaSegments(&mapping->Resource, countOut);
+    return __DMASegments(&mapping->Resource, countOut);
 }
 
 static oserr_t
-__DmaWait(
+__DMAWait(
     _In_ struct DMAMapping*   mapping,
     _In_ enum SHMAccessKind   kind,
     _In_ size_t               offset,
@@ -222,7 +222,7 @@ DMABeginTransfer(
 
     // Streaming transfer calls only apply to single-transfer mappings.
     // Persistent mappings use DMABeginUse/DMAEndUse, and region mappings use
-    // DMARegionSession with DMATryBeginRegionUse/DMAEndRegionUse.
+    // DMARegionSession with DMARegionUseTryBegin/DMARegionUseEnd.
     if (mapping == NULL || (mapping->Flags & (DMA_MAP_PERSISTENT | DMA_MAP_REGIONS)) != 0) {
         return OS_EINVALPARAMS;
     }
@@ -233,7 +233,7 @@ DMABeginTransfer(
 
     // Coherent devices go through the same call. The kernel still checks access
     // conflicts and ordering, even when no cache work or bounce copy is needed.
-    status = __DmaWait(mapping, DMAAccessTransfer, offset, length, mode, deadline);
+    status = __DMAWait(mapping, DMAAccessTransfer, offset, length, mode, deadline);
 
     if (status != OS_EOK) {
         WARNING("DMABeginTransfer: mapping %u failed (%u)", mapping->Resource.Handle, status);
@@ -250,7 +250,7 @@ DMAEndTransfer(
 
     // Streaming transfer calls only apply to single-transfer mappings.
     // Persistent mappings use DMABeginUse/DMAEndUse, and region mappings use
-    // DMARegionSession with DMATryBeginRegionUse/DMAEndRegionUse.
+    // DMARegionSession with DMARegionUseTryBegin/DMARegionUseEnd.
     if (mapping == NULL || (mapping->Flags & (DMA_MAP_PERSISTENT | DMA_MAP_REGIONS)) != 0) {
         return OS_EINVALPARAMS;
     }
@@ -289,10 +289,10 @@ DMAUnmap(
     // Stop new region sessions from opening if releasing the mapping fails and
     // has to be retried later.
     if (((*mapping)->Flags & DMA_MAP_REGIONS) != 0) {
-        (*mapping)->State = DmaMappingStateUnmapping;
+        (*mapping)->State = DMAMappingStateUnmapping;
     }
 
-    status = __DmaRelease(&(*mapping)->Resource);
+    status = __DMARelease(&(*mapping)->Resource);
     if (status == OS_EOK) {
         *mapping = NULL;
     }
@@ -315,7 +315,7 @@ DMABeginUse(
         return OS_EBUSY;
     }
 
-    status = __DmaWait(mapping, DMAAccessUse, 0, 0, mode, deadline);
+    status = __DMAWait(mapping, DMAAccessUse, 0, 0, mode, deadline);
 
     if (status == OS_EOK) {
         use->Mapping = mapping;

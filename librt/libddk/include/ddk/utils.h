@@ -96,19 +96,6 @@ SystemDebug(
     _In_ enum OSSysLogLevel level,
     _In_ const char*        format, ...));
 
-/**
- * @brief Requests to have the boot ramdisk mapped into the current memory space and
- * returns a pointer to the ramdisk. The memory can be freed by calling MemoryFree.
- *
- * @param[Out] bufferOut       A pointer to storage of a void* pointer that will be set to the ramdisk.
- * @param[Out] bufferLengthOut Size of the ramdisk buffer
- * @return     Status of the operation.
- */
-DDKDECL(oserr_t,
-DdkUtilsMapRamdisk(
-    _Out_ void**  bufferOut,
-    _Out_ size_t* bufferLengthOut));
-
 _CODE_END
 
 #endif //!__DDK_UTILS_H__

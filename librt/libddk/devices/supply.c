@@ -17,7 +17,7 @@
  * Wrappers for OSIOCTLREQUEST_SUPPLY_CONTROL.
  */
 
-#include <ddk/supply.h>
+#include <ddk/devices/supply.h>
 #include <os/device.h>
 #include <string.h>
 

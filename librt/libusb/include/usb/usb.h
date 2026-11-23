@@ -157,9 +157,9 @@ typedef struct USBTransfer {
 
 #define USB_TRANSFER_ENDPOINT_CONTROL NULL
 
-extern oserr_t          UsbInitialize(void);
-extern void             UsbCleanup(void);
-extern struct dma_pool* UsbRetrievePool(void);
+extern oserr_t       UsbInitialize(void);
+extern void          UsbCleanup(void);
+extern BufferPool_t* UsbRetrievePool(void);
 
 /**
  * @brief Initialize the fields common to all USB transfers.

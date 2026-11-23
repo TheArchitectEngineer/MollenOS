@@ -18,10 +18,10 @@
  */
 
 #include <internal/_syscalls.h>
-#include <ddk/utils.h>
+#include <ddk/initrd.h>
 
 oserr_t
-DdkUtilsMapRamdisk(
+InitrdMap(
     _Out_ void**  bufferOut,
     _Out_ size_t* bufferLengthOut)
 {

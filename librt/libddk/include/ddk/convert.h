@@ -71,7 +71,7 @@ static void from_sys_disk_descriptor(struct sys_disk_descriptor* in, OSStorageDe
     out->SerialNumber[len] = 0;
 }
 
-static void from_sys_disk_descriptor_dkk(struct sys_disk_descriptor* in, StorageDescriptor_t* out)
+static void from_sys_disk_descriptor_ddk(struct sys_disk_descriptor* in, StorageDescriptor_t* out)
 {
     size_t serialLen = strnlen(in->serial, sizeof(out->Serial) - 1);
     size_t modelLen  = strnlen(in->model, sizeof(out->Model) - 1);
@@ -225,8 +225,8 @@ static void to_sys_device_bus(BusDevice_t* in, struct sys_device_bus* out)
     out->slot = in->Slot;
     out->function = in->Function;
 
-    sys_device_bus_ios_add(out, __DEVICEMANAGER_MAX_IOSPACES);
-    for (int __i = 0; __i < __DEVICEMANAGER_MAX_IOSPACES; __i++) {
+    sys_device_bus_ios_add(out, DEVICEMANAGER_MAX_IOSPACES);
+    for (int __i = 0; __i < DEVICEMANAGER_MAX_IOSPACES; __i++) {
         struct sys_bus_io* io = sys_device_bus_ios_get(out, __i);
         to_sys_bus_io(&in->IoSpaces[__i], io);
     }

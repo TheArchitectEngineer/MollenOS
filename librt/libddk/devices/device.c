@@ -24,7 +24,7 @@
 #include <sys_device_service_client.h>
 
 uuid_t
-RegisterDevice(
+DeviceRegister(
     _In_ Device_t*    device,
     _In_ unsigned int flags)
 {
@@ -36,7 +36,7 @@ RegisterDevice(
 
     oserr = to_sys_device(device, &sysDevice);
     if (oserr != OS_EOK) {
-        ERROR("RegisterDevice: device description could not be converted: %u", oserr);
+        ERROR("DeviceRegister: device description could not be converted: %u", oserr);
         return UUID_INVALID;
     }
 
@@ -45,24 +45,24 @@ RegisterDevice(
     status = sys_device_register(GetGrachtClient(), &msg.base, &sysDevice, flags);
     sys_device_destroy(&sysDevice);
     if (status != 0) {
-        ERROR("RegisterDevice: send failed: %i", status);
+        ERROR("DeviceRegister: send failed: %i", status);
         return UUID_INVALID;
     }
 
     status = gracht_client_await(GetGrachtClient(), &msg.base, GRACHT_AWAIT_ASYNC);
     if (status != 0) {
-        ERROR("RegisterDevice: wait failed: %i", status);
+        ERROR("DeviceRegister: wait failed: %i", status);
         return UUID_INVALID;
     }
 
     status = sys_device_register_result(GetGrachtClient(), &msg.base, &oserr, &id);
     if (status != 0) {
-        ERROR("RegisterDevice: decode failed: %i", status);
+        ERROR("DeviceRegister: decode failed: %i", status);
         return UUID_INVALID;
     }
 
     if (oserr != OS_EOK) {
-        WARNING("RegisterDevice: registration rejected: %u", oserr);
+        WARNING("DeviceRegister: registration rejected: %u", oserr);
         return UUID_INVALID;
     }
 
@@ -72,7 +72,7 @@ RegisterDevice(
 }
 
 oserr_t
-UnregisterDevice(
+DeviceUnregister(
     _In_ uuid_t deviceId)
 {
     struct vali_link_message msg = VALI_MSG_INIT_HANDLE(GetDeviceService());
@@ -81,30 +81,30 @@ UnregisterDevice(
 
     status = sys_device_unregister(GetGrachtClient(), &msg.base, deviceId);
     if (status != 0) {
-        WARNING("UnregisterDevice: device %u send failed: %i", deviceId, status);
+        WARNING("DeviceUnregister: device %u send failed: %i", deviceId, status);
         return OS_EPROTOCOL;
     }
 
     status = gracht_client_await(GetGrachtClient(), &msg.base, GRACHT_AWAIT_ASYNC);
     if (status != 0) {
-        WARNING("UnregisterDevice: device %u wait failed: %i", deviceId, status);
+        WARNING("DeviceUnregister: device %u wait failed: %i", deviceId, status);
         return OS_EPROTOCOL;
     }
 
     status = sys_device_unregister_result(GetGrachtClient(), &msg.base, &oserr);
     if (status != 0) {
-        WARNING("UnregisterDevice: device %u decode failed: %i", deviceId, status);
+        WARNING("DeviceUnregister: device %u decode failed: %i", deviceId, status);
         return OS_EPROTOCOL;
     }
 
     if (oserr != OS_EOK) {
-        WARNING("UnregisterDevice: device %u removal rejected: %u", deviceId, oserr);
+        WARNING("DeviceUnregister: device %u removal rejected: %u", deviceId, oserr);
     }
     return oserr;
 }
 
 oserr_t
-IoctlDeviceEx(
+DeviceIoctlEx(
     _In_    uuid_t       deviceId,
     _In_    int          direction,
     _In_    unsigned int offset,
@@ -124,24 +124,24 @@ IoctlDeviceEx(
 
     status = sys_device_ioctlex(GetGrachtClient(), &msg.base, deviceId, direction, offset, decoded, width);
     if (status != 0) {
-        WARNING("IoctlDeviceEx: device %u send failed: %i", deviceId, status);
+        WARNING("DeviceIoctlEx: device %u send failed: %i", deviceId, status);
         return OS_EPROTOCOL;
     }
 
     status = gracht_client_await(GetGrachtClient(), &msg.base, GRACHT_AWAIT_ASYNC);
     if (status != 0) {
-        WARNING("IoctlDeviceEx: device %u wait failed: %i", deviceId, status);
+        WARNING("DeviceIoctlEx: device %u wait failed: %i", deviceId, status);
         return OS_EPROTOCOL;
     }
 
     status = sys_device_ioctlex_result(GetGrachtClient(), &msg.base, &oserr, &decoded);
     if (status != 0) {
-        WARNING("IoctlDeviceEx: device %u decode failed: %i", deviceId, status);
+        WARNING("DeviceIoctlEx: device %u decode failed: %i", deviceId, status);
         return OS_EPROTOCOL;
     }
 
     if (oserr != OS_EOK) {
-        WARNING("IoctlDeviceEx: device %u access rejected: %u", deviceId, oserr);
+        WARNING("DeviceIoctlEx: device %u access rejected: %u", deviceId, oserr);
         return oserr;
     }
 

@@ -27,7 +27,7 @@
 #include "private.h"
 
 struct DMABuffer {
-    struct __DmaResource Resource;
+    struct __DMAResource Resource;
     SHMHandle_t          Storage;
 };
 
@@ -47,7 +47,7 @@ DMAAllocate(
         return OS_EINVALPARAMS;
     }
 
-    if (*bufferOut != NULL || context->State != DmaContextStateOpen) {
+    if (*bufferOut != NULL || context->State != DMAContextStateOpen) {
         return OS_EBUSY;
     }
 
@@ -70,7 +70,7 @@ DMAAllocate(
     buffer->Storage = result.Buffer;
     buffer->Resource.Storage = &buffer->Storage;
 
-    status = __DmaPrepareResource(&buffer->Resource, context, &result.Mapping);
+    status = __DMAPrepareResource(&buffer->Resource, context, &result.Mapping);
     if (status != OS_EOK) {
         return status;
     }
@@ -100,7 +100,7 @@ DMABufferSegments(
     _In_  const struct DMABuffer* buffer,
     _Out_ uint32_t*               countOut)
 {
-    return __DmaSegments(&buffer->Resource, countOut);
+    return __DMASegments(&buffer->Resource, countOut);
 }
 
 oserr_t
@@ -115,7 +115,7 @@ DMAFree(
 
     // Hardware quiescence is the driver's responsibility. Unlike streaming
     // mappings this memory is continuously shared and has no handoff state.
-    status = __DmaRelease(&(*buffer)->Resource);
+    status = __DMARelease(&(*buffer)->Resource);
     if (status == OS_EOK) {
         *buffer = NULL;
     }

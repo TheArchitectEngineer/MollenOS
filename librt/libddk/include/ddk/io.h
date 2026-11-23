@@ -150,7 +150,7 @@ __WriteVolatileLowHigh64(
 
 /**
  * @brief Registers a range of device memory (MMIO) with the kernel as an I/O
- * space. The range is not mapped yet. Call AcquireDeviceIo to map it before
+ * space. The range is not mapped yet. Call DeviceIoAcquire to map it before
  * reading or writing registers.
  *
  * @param ioSpace      Receives the description and the identifier of the I/O space.
@@ -161,7 +161,7 @@ __WriteVolatileLowHigh64(
  *         that is already registered.
  */
 DDKDECL(oserr_t,
-CreateDeviceMemoryIo(
+DeviceIoCreateMemory(
     _In_ DeviceIo_t* ioSpace,
     _In_ uintptr_t   physicalBase,
     _In_ size_t      length));
@@ -177,14 +177,14 @@ CreateDeviceMemoryIo(
  *         that is already registered.
  */
 DDKDECL(oserr_t,
-CreateDevicePortIo(
+DeviceIoCreatePort(
     _In_ DeviceIo_t* ioSpace,
     _In_ uint16_t    port,
     _In_ size_t      length));
 
 /**
  * @brief Registers a single pin of a port with the kernel as an I/O space.
- * ReadDeviceIo and WriteDeviceIo do not support pin based I/O spaces.
+ * DeviceIoRead and DeviceIoWrite do not support pin based I/O spaces.
  *
  * @param ioSpace Receives the description and the identifier of the I/O space.
  * @param port    Number of the port the pin belongs to.
@@ -193,7 +193,7 @@ CreateDevicePortIo(
  *         from the kernel. The kernel refuses a pin that is already registered.
  */
 DDKDECL(oserr_t,
-CreateDevicePinIo(
+DeviceIoCreatePin(
     _In_ DeviceIo_t* ioSpace,
     _In_ uint16_t    port,
     _In_ uint8_t     pin));
@@ -207,7 +207,7 @@ CreateDevicePinIo(
  *         from the kernel.
  */
 DDKDECL(oserr_t,
-DestroyDeviceIo(
+DeviceIoDestroy(
     _In_ DeviceIo_t* ioSpace));
 
 /**
@@ -221,11 +221,11 @@ DestroyDeviceIo(
  *         from the kernel.
  */
 DDKDECL(oserr_t,
-AcquireDeviceIo(
+DeviceIoAcquire(
     _InOut_ DeviceIo_t* ioSpace));
 
 /**
- * @brief Gives up an I/O space taken with AcquireDeviceIo, so another driver
+ * @brief Gives up an I/O space taken with DeviceIoAcquire, so another driver
  * can acquire it. For device memory the mapping is removed and
  * Access.Memory.VirtualBase is set to zero.
  *
@@ -234,7 +234,7 @@ AcquireDeviceIo(
  *         from the kernel.
  */
 DDKDECL(oserr_t,
-ReleaseDeviceIo(
+DeviceIoRelease(
     _InOut_ DeviceIo_t* ioSpace));
 
 /**
@@ -253,7 +253,7 @@ ReleaseDeviceIo(
  * @return OS_EOK on success, or an error for an invalid range or failed mapping.
  */
 DDKDECL(oserr_t,
-MapDeviceIo(
+DeviceIoMap(
     _In_  uuid_t id,
     _In_  size_t offset,
     _In_  size_t length,
@@ -272,14 +272,14 @@ MapDeviceIo(
  *         returns zero.
  */
 DDKDECL(size_t,
-ReadDeviceIo(
+DeviceIoRead(
     _In_ DeviceIo_t* ioSpace,
     _In_ size_t      offset,
     _In_ size_t      length));
 
 /**
  * @brief Writes one register in an acquired I/O space. The supported widths
- * are the same as for ReadDeviceIo.
+ * are the same as for DeviceIoRead.
  *
  * @param ioSpace The acquired I/O space.
  * @param offset  Byte offset of the register inside the I/O space.
@@ -290,7 +290,7 @@ ReadDeviceIo(
  *         can not be written.
  */
 DDKDECL(oserr_t,
-WriteDeviceIo(
+DeviceIoWrite(
     _In_ DeviceIo_t* ioSpace,
     _In_ size_t      offset,
     _In_ size_t      value,
@@ -304,16 +304,16 @@ WriteDeviceIo(
  * @return The combined register value.
  */
 static inline uint64_t
-__ReadDeviceIoLowHigh64(
+DeviceIoReadLowHigh64(
     _In_ DeviceIo_t* IoSpace,
     _In_ size_t     Offset)
 {
     uint32_t low;
     uint32_t high;
 
-    low = (uint32_t)ReadDeviceIo(IoSpace, Offset, sizeof(low));
+    low = (uint32_t)DeviceIoRead(IoSpace, Offset, sizeof(low));
     rmb();
-    high = (uint32_t)ReadDeviceIo(IoSpace, Offset + sizeof(low), sizeof(high));
+    high = (uint32_t)DeviceIoRead(IoSpace, Offset + sizeof(low), sizeof(high));
     return ((uint64_t)high << 32) | low;
 }
 
@@ -326,20 +326,20 @@ __ReadDeviceIoLowHigh64(
  * @return OS_EOK on success, or the error from either 32-bit write.
  */
 static inline oserr_t
-__WriteDeviceIoLowHigh64(
+DeviceIoWriteLowHigh64(
     _In_ DeviceIo_t* IoSpace,
     _In_ size_t     Offset,
     _In_ uint64_t   Value)
 {
     oserr_t oserr;
 
-    oserr = WriteDeviceIo(IoSpace, Offset, (uint32_t)Value, sizeof(uint32_t));
+    oserr = DeviceIoWrite(IoSpace, Offset, (uint32_t)Value, sizeof(uint32_t));
     if (oserr != OS_EOK) {
         return oserr;
     }
 
     wmb();
-    return WriteDeviceIo(
+    return DeviceIoWrite(
         IoSpace,
         Offset + sizeof(uint32_t),
         (uint32_t)(Value >> 32),

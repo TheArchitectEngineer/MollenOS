@@ -26,9 +26,9 @@
 
 // A buffer or a mapping created from a context. Its device segment list is kept
 // here so the accessors can return it without asking the kernel again.
-struct __DmaResource {
+struct __DMAResource {
     // Next resource in the context's Pending list. Only used while on that list.
-    struct __DmaResource* Next;
+    struct __DMAResource* Next;
     // The context this resource was created from.
     struct DMAContext*    Context;
     // Kernel handle of the device mapping.
@@ -45,13 +45,13 @@ struct __DmaResource {
 
 // Where a mapping is in its life. Only region mappings ever leave Mapped
 // before they are freed, because only their unmap can be blocked half way.
-enum __DmaMappingState {
+enum __DMAMappingState {
     // The mapping can be used, and region sessions can be opened on it.
-    DmaMappingStateMapped,
+    DMAMappingStateMapped,
     // DMAUnmap has started on a region mapping. If releasing it fails, the
     // mapping stays in this state and no new region session can be opened
     // until the unmap is tried again and succeeds.
-    DmaMappingStateUnmapping
+    DMAMappingStateUnmapping
 };
 
 // Tracks a DMA mapping created by DMAMapSHM, DMAMapSHMDirect, DMAMapSHMPersistent,
@@ -59,7 +59,7 @@ enum __DmaMappingState {
 // Individual region sessions serialize their own transfers independently.
 struct DMAMapping {
     // Kernel handle and cached device segments shared with DMABuffer.
-    struct __DmaResource   Resource;
+    struct __DMAResource   Resource;
     // DMA_MAP_* flags fixed when the mapping was created.
     unsigned int           Flags;
     // Mapped byte count, used to check streaming transfer ranges.
@@ -69,23 +69,23 @@ struct DMAMapping {
     // Number of open DMARegionSession_t objects referencing this mapping.
     // DMAUnmap refuses to run while any region session is still open.
     unsigned int           Sessions;
-    // See enum __DmaMappingState.
-    enum __DmaMappingState State;
+    // See enum __DMAMappingState.
+    enum __DMAMappingState State;
 };
 
 // Where a context is in its life. A context only moves forward through these
 // states, and is freed once DMAClose has released everything.
-enum __DmaContextState {
+enum __DMAContextState {
     // The open succeeded. Buffers and mappings can be created.
-    DmaContextStateOpen,
+    DMAContextStateOpen,
     // The reply to the binding request was lost during open, so it is unknown
     // whether the device service granted the binding. The context can not
     // create buffers or mappings. DMAClose sends the same request again to
     // learn the outcome before it releases anything.
-    DmaContextStateBindingUnknown,
+    DMAContextStateBindingUnknown,
     // DMAClose has started, or the open failed and only cleanup is left. No
     // new buffers or mappings can be created.
-    DmaContextStateClosing
+    DMAContextStateClosing
 };
 
 // The driver's DMA access to one device. At most one context exists per device
@@ -100,13 +100,13 @@ struct DMAContext {
     uint64_t               RequestId;
     // Permission the device service gave this process to open a context.
     OSDmaBindingResult_t   Binding;
-    // See enum __DmaContextState.
-    enum __DmaContextState State;
+    // See enum __DMAContextState.
+    enum __DMAContextState State;
     // Number of buffers and mappings from this context that are not released yet.
     // Resources waiting in Pending are included.
     atomic_uint            Children;
     // Resources whose creation failed and whose cleanup must be retried.
-    struct __DmaResource*  Pending;
+    struct __DMAResource*  Pending;
 };
 
 /**
@@ -115,7 +115,7 @@ struct DMAContext {
  * segment. Implemented in resource.c.
  *
  * On failure the kernel mapping is released again and the resource is freed.
- * If that release fails as well, the resource is handed to __DmaDeferCleanup.
+ * If that release fails as well, the resource is handed to __DMADeferCleanup.
  * The caller must not touch the resource after a failure.
  *
  * @param resource Zeroed resource at the start of a DMABuffer or DMAMapping.
@@ -126,8 +126,8 @@ struct DMAContext {
  *         cannot be allocated, or an error from the kernel.
  */
 oserr_t
-__DmaPrepareResource(
-    _In_ struct __DmaResource*            resource,
+__DMAPrepareResource(
+    _In_ struct __DMAResource*            resource,
     _In_ struct DMAContext*               context,
     _In_ const struct OSDmaMappingResult* result);
 
@@ -142,21 +142,21 @@ __DmaPrepareResource(
  * @return OS_EOK when the resource is freed, or the error of the failed step.
  */
 oserr_t
-__DmaRelease(
-    _In_ struct __DmaResource* resource);
+__DMARelease(
+    _In_ struct __DMAResource* resource);
 
 /**
  * @brief Returns the device segments of a resource. The list belongs to the
  * resource and stays valid until the resource is released. Implemented in
  * resource.c.
  *
- * @param resource Resource that __DmaPrepareResource has filled in.
+ * @param resource Resource that __DMAPrepareResource has filled in.
  * @param countOut Receives the number of segments.
  * @return The first segment of the list.
  */
 const struct DMASegment*
-__DmaSegments(
-    _In_  const struct __DmaResource* resource,
+__DMASegments(
+    _In_  const struct __DMAResource* resource,
     _Out_ uint32_t*                   countOut);
 
 /**
@@ -176,7 +176,7 @@ __DmaSegments(
  *         the kernel.
  */
 oserr_t
-__DmaMapSHM(
+__DMAMapSHM(
     _In_    struct DMAContext*               context,
     _In_    const OSHandle_t*                buffer,
     _In_    size_t                           offset,
@@ -196,11 +196,11 @@ __DmaMapSHM(
  * it over and frees it once cleanup succeeds.
  */
 void
-__DmaDeferCleanup(
-    _In_ struct __DmaResource* resource);
+__DMADeferCleanup(
+    _In_ struct __DMAResource* resource);
 
 /**
- * @brief Retries the cleanup of every resource saved by __DmaDeferCleanup.
+ * @brief Retries the cleanup of every resource saved by __DMADeferCleanup.
  * Implemented in resource.c.
  * The context registry lock must be held.
  *
@@ -210,7 +210,7 @@ __DmaDeferCleanup(
  * on the list for the next try.
  */
 oserr_t
-__DmaCollect(
+__DMACollect(
     _In_ struct DMAContext* context);
 
 #endif //!__DDK_DMA_PRIVATE_H__

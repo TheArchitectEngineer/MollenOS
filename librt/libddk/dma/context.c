@@ -172,7 +172,7 @@ DMAOpen(
     }
 
     atomic_init(&context->Children, 0);
-    context->State = DmaContextStateOpen;
+    context->State = DMAContextStateOpen;
     context->Device = device;
     context->RequestId = ++g_dmaRequestId;
     context->Handle = UUID_INVALID;
@@ -184,7 +184,7 @@ DMAOpen(
             // The service may have granted the binding even though the reply was
             // lost. Keep the request ID so DMAClose can ask again and get the
             // same binding back.
-            context->State = DmaContextStateBindingUnknown;
+            context->State = DMAContextStateBindingUnknown;
             goto publish;
         }
         goto discard;
@@ -202,7 +202,7 @@ DMAOpen(
         if (cleanupStatus != OS_EOK) {
             // The binding is still held, so the context is kept to release it
             // from DMAClose.
-            context->State = DmaContextStateClosing;
+            context->State = DMAContextStateClosing;
             goto publish;
         }
         goto discard;
@@ -232,14 +232,14 @@ discard:
 }
 
 void
-__DmaDeferCleanup(
-    _In_ struct __DmaResource* resource)
+__DMADeferCleanup(
+    _In_ struct __DMAResource* resource)
 {
     // A failed creation never hands a half-built object to the driver. If undoing
     // it also fails, keep the object here so its kernel handle and SHM attachment
     // are not lost.
     mtx_lock(&g_dmaContextLock);
-    WARNING("__DmaDeferCleanup: device %u, context %u, mapping %u deferring resource cleanup",
+    WARNING("__DMADeferCleanup: device %u, context %u, mapping %u deferring resource cleanup",
             resource->Context->Device, resource->Context->Handle, resource->Handle);
     resource->Next = resource->Context->Pending;
     resource->Context->Pending = resource;
@@ -266,9 +266,9 @@ DMAClose(
     // Retry the cleanup of failed creations first, because they still count as
     // children. A buffer also still counts after its mapping is gone if detaching
     // its SHM buffer failed.
-    status = __DmaCollect(context);
+    status = __DMACollect(context);
     if (status != OS_EOK) {
-        ERROR("DMAClose: __DmaCollect device %u, context %u failed: %u; pending resources retained",
+        ERROR("DMAClose: __DMACollect device %u, context %u failed: %u; pending resources retained",
               context->Device, context->Handle, status);
         goto exit;
     }
@@ -285,7 +285,7 @@ DMAClose(
     // where the last try stopped. A normal close sends no request to the device
     // service. Only a context whose binding reply was lost sends the original
     // request again.
-    if (context->State == DmaContextStateBindingUnknown) {
+    if (context->State == DMAContextStateBindingUnknown) {
         status = __RequestBinding(context, &decoded);
         if (status != OS_EOK) {
             // Even a clear rejection does not prove the earlier request failed,
@@ -294,7 +294,7 @@ DMAClose(
             goto exit;
         }
     }
-    context->State = DmaContextStateClosing;
+    context->State = DMAContextStateClosing;
     
     if (context->Handle != UUID_INVALID) {
         status = Syscall_ResourceRelease(context->Handle);

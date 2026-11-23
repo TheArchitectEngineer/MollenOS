@@ -201,7 +201,7 @@ DeviceInterruptBusClose(
  *         the device or release the bus handler handles.
  */
 DDKDECL(oserr_t,
-DeviceInterruptReap(
+DeviceInterruptBusReap(
     _In_ uuid_t handle));
 
 _CODE_END

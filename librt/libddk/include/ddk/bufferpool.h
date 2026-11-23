@@ -28,7 +28,9 @@
 
 _CODE_BEGIN
 
-struct dma_pool;
+// A pool that hands out pieces of one mapped SHM buffer. Its layout is private
+// to libddk.
+typedef struct BufferPool BufferPool_t;
 
 /**
  * @brief Creates an allocation pool within a mapped SHM buffer.
@@ -41,9 +43,9 @@ struct dma_pool;
  * @return OS_EOK, or an argument, allocation or CPU information query error.
  */
 DDKDECL(oserr_t,
-dma_pool_create(
-    _In_  OSHandle_t*       shm,
-    _Out_ struct dma_pool** poolOut));
+BufferPoolCreate(
+    _In_  OSHandle_t*    shm,
+    _Out_ BufferPool_t** poolOut));
 
 /**
  * @brief Frees the pool and its allocator data. The SHM buffer remains valid.
@@ -52,8 +54,8 @@ dma_pool_create(
  * @return OS_EOK.
  */
 DDKDECL(oserr_t,
-dma_pool_destroy(
-    _In_ struct dma_pool* pool));
+BufferPoolDestroy(
+    _In_ BufferPool_t* pool));
 
 /**
  * @brief Allocates CPU-accessible memory on separate cache lines within the pool.
@@ -64,36 +66,51 @@ dma_pool_destroy(
  *
  * @param pool Pool created from a mapped SHM buffer.
  * @param length Number of bytes to allocate.
- * @param address_out Receives a CPU pointer. Use dma_pool_offset for SHM I/O.
+ * @param addressOut Receives a CPU pointer. Use BufferPoolOffset for SHM I/O.
  * @return OS_EOK, OS_EINVALPARAMS for zero length, or OS_EOOM if the pool cannot fit it.
  */
 DDKDECL(oserr_t,
-dma_pool_allocate(
-    _In_  struct dma_pool* pool,
-    _In_  size_t           length,
-    _Out_ void**           address_out));
+BufferPoolAllocate(
+    _In_  BufferPool_t* pool,
+    _In_  size_t        length,
+    _Out_ void**        addressOut));
 
 /**
  * @brief Frees an allocation from the pool.
  * All DMA use of the allocation must have completed before this call.
  *
  * @param pool Pool the allocation came from.
- * @param address CPU pointer returned by dma_pool_allocate.
+ * @param address CPU pointer returned by BufferPoolAllocate.
  * @return OS_EOK.
  */
 DDKDECL(oserr_t,
-dma_pool_free(
-    _In_ struct dma_pool* pool,
-    _In_ void*            address));
+BufferPoolFree(
+    _In_ BufferPool_t* pool,
+    _In_ void*         address));
 
+/**
+ * @brief Returns the handle of the SHM buffer the pool was created from.
+ *
+ * @param pool Pool created by BufferPoolCreate.
+ * @return The handle ID of the SHM buffer.
+ */
 DDKDECL(uuid_t,
-dma_pool_handle(
-    _In_ struct dma_pool* pool));    
+BufferPoolHandle(
+    _In_ BufferPool_t* pool));
 
+/**
+ * @brief Returns the byte offset of an allocation inside the SHM buffer. A
+ * driver passes this offset, together with the handle, to the calls that map
+ * or transfer a range of the buffer.
+ *
+ * @param pool    Pool the allocation came from.
+ * @param address CPU pointer returned by BufferPoolAllocate.
+ * @return The offset of address from the start of the SHM buffer.
+ */
 DDKDECL(size_t,
-dma_pool_offset(
-    _In_ struct dma_pool* pool,
-    _In_ void*            address));
+BufferPoolOffset(
+    _In_ BufferPool_t* pool,
+    _In_ void*         address));
 
 _CODE_END
 #endif //!__DDK_BUFFERPOOL_H__

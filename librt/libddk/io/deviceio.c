@@ -18,7 +18,7 @@
  *
  * Device I/O spaces. A driver registers the memory range, port range or pin of
  * its device with the kernel, acquires it, and then reads and writes the
- * registers through ReadDeviceIo and WriteDeviceIo.
+ * registers through DeviceIoRead and DeviceIoWrite.
  */
 
 #include <internal/_syscalls.h>
@@ -37,7 +37,7 @@ ASMDECL(void,     __writelong(uint16_t Port, uint32_t Value));
 #endif
 
 oserr_t
-CreateDeviceMemoryIo(
+DeviceIoCreateMemory(
     _In_ DeviceIo_t* ioSpace,
     _In_ uintptr_t   physicalBase,
     _In_ size_t      length)
@@ -47,7 +47,7 @@ CreateDeviceMemoryIo(
         return OS_EINVALPARAMS;
     }
 
-    // The virtual base stays zero until AcquireDeviceIo has mapped the range.
+    // The virtual base stays zero until DeviceIoAcquire has mapped the range.
     ioSpace->Type                       = DeviceIoMemoryBased;
     ioSpace->Access.Memory.PhysicalBase = physicalBase;
     ioSpace->Access.Memory.VirtualBase  = 0;
@@ -56,7 +56,7 @@ CreateDeviceMemoryIo(
 }
 
 oserr_t
-CreateDevicePortIo(
+DeviceIoCreatePort(
     _In_ DeviceIo_t* ioSpace,
     _In_ uint16_t    port,
     _In_ size_t      length)
@@ -73,7 +73,7 @@ CreateDevicePortIo(
 }
 
 oserr_t
-CreateDevicePinIo(
+DeviceIoCreatePin(
     _In_ DeviceIo_t* ioSpace,
     _In_ uint16_t    port,
     _In_ uint8_t     pin)
@@ -90,7 +90,7 @@ CreateDevicePinIo(
 }
 
 oserr_t
-DestroyDeviceIo(
+DeviceIoDestroy(
     _In_ DeviceIo_t* ioSpace)
 {
     assert(ioSpace != NULL);
@@ -101,7 +101,7 @@ DestroyDeviceIo(
 }
 
 oserr_t
-AcquireDeviceIo(
+DeviceIoAcquire(
     _InOut_ DeviceIo_t* ioSpace)
 {
     assert(ioSpace != NULL);
@@ -112,7 +112,7 @@ AcquireDeviceIo(
 }
 
 oserr_t
-MapDeviceIo(
+DeviceIoMap(
     _In_  uuid_t id,
     _In_  size_t offset,
     _In_  size_t length,
@@ -122,7 +122,7 @@ MapDeviceIo(
 }
 
 oserr_t
-ReleaseDeviceIo(
+DeviceIoRelease(
     _InOut_ DeviceIo_t* ioSpace)
 {
     assert(ioSpace != NULL);
@@ -237,7 +237,7 @@ __WritePort(
 #endif
 
 size_t
-ReadDeviceIo(
+DeviceIoRead(
     _In_ DeviceIo_t* ioSpace,
     _In_ size_t      offset,
     _In_ size_t      length)
@@ -271,7 +271,7 @@ ReadDeviceIo(
     // The value itself is the return value, so a failed read can only be
     // reported in the log. It reads as zero.
     if (status != OS_EOK) {
-        ERROR("ReadDeviceIo: io-space %u type %u, offset %zu, width %zu cannot be read (%u)",
+        ERROR("DeviceIoRead: io-space %u type %u, offset %zu, width %zu cannot be read (%u)",
               ioSpace->Id, ioSpace->Type, offset, length, status);
         return 0;
     }
@@ -279,7 +279,7 @@ ReadDeviceIo(
 }
 
 oserr_t
-WriteDeviceIo(
+DeviceIoWrite(
     _In_ DeviceIo_t* ioSpace,
     _In_ size_t      offset,
     _In_ size_t      value,
@@ -311,7 +311,7 @@ WriteDeviceIo(
     }
 
     if (status != OS_EOK) {
-        ERROR("WriteDeviceIo: io-space %u type %u, offset %zu, width %zu cannot be written (%u)",
+        ERROR("DeviceIoWrite: io-space %u type %u, offset %zu, width %zu cannot be written (%u)",
               ioSpace->Id, ioSpace->Type, offset, length, status);
     }
     return status;

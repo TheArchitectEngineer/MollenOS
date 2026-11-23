@@ -46,13 +46,13 @@ add_library(libddk
     ${GENERATED_SOURCES}
     ${ASM_SOURCES}
 
-    device/clock.c
-    device/controller.c
-    device/device.c
-    device/ethernet.c
-    device/firmware_node.c
-    device/resources.c
-    device/supply.c
+    devices/clock.c
+    devices/controller.c
+    devices/device.c
+    devices/ethernet.c
+    devices/firmware-node.c
+    devices/resources.c
+    devices/supply.c
 
     dma/attachment.c
     dma/buffer.c

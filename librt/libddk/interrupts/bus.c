@@ -78,7 +78,7 @@ DeviceInterruptBusClose(
 }
 
 oserr_t
-DeviceInterruptReap(
+DeviceInterruptBusReap(
     _In_ uuid_t handle)
 {
     // The driver process must have exited before the kernel removes its

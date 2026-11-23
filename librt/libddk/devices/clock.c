@@ -17,7 +17,7 @@
  * Wrapper for OSIOCTLREQUEST_CLOCK_RATE.
  */
 
-#include <ddk/clock.h>
+#include <ddk/devices/clock.h>
 #include <os/device.h>
 
 oserr_t

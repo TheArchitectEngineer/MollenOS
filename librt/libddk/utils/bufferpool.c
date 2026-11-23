@@ -15,11 +15,10 @@
  * You should have received a copy of the GNU General Public License
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  *
- *
- * BufferPool Support Definitions & Structures
- * - This header describes the base bufferpool-structures, prototypes
- *   and functionality, refer to the individual things for descriptions
+ * Buffer pool. Hands out cache-line aligned pieces of one mapped SHM buffer,
+ * using the BGET allocator in third_party/bget.
  */
+
 //#define __TRACE
 
 #include <ddk/bufferpool.h>
@@ -31,18 +30,21 @@
 #include <stdlib.h>
 #include <string.h>
 
-struct dma_pool {
-    struct bytepool* pool;
-    OSHandle_t       handle;
+struct BufferPool {
+    // Allocator state of the BGET byte pool that manages the buffer.
+    struct bytepool* Pool;
+    // The SHM buffer the pool hands out pieces of.
+    OSHandle_t       Handle;
+    // Cache line size in bytes. Every allocation starts on a multiple of it.
     size_t           Alignment;
 };
 
 oserr_t
-dma_pool_create(
-    _In_  OSHandle_t*       shm,
-    _Out_ struct dma_pool** poolOut)
+BufferPoolCreate(
+    _In_  OSHandle_t*    shm,
+    _Out_ BufferPool_t** poolOut)
 {
-    struct dma_pool*  pool;
+    BufferPool_t*     pool;
     OSSystemCPUInfo_t cacheInfo;
     size_t            queried;
     oserr_t           oserr;
@@ -71,20 +73,20 @@ dma_pool_create(
         return OS_EINVALPARAMS;
     }
 
-    pool = (struct dma_pool*)malloc(sizeof(struct dma_pool));
+    pool = (BufferPool_t*)malloc(sizeof(BufferPool_t));
     if (!pool) {
         return OS_EOOM;
     }
 
     // The pool uses CPU addresses and SHM byte offsets. The controller maps
     // each submitted range for DMA, so we do not need to query physical pages here.
-    memcpy(&pool->handle, shm, sizeof(OSHandle_t));
+    memcpy(&pool->Handle, shm, sizeof(OSHandle_t));
     pool->Alignment = cacheInfo.DataCacheLineSizeBytes;
 
     // bpool requires NULL when creating the first region. A non-NULL pointer
     // tells it to extend an existing pool.
-    pool->pool = NULL;
-    oserr = bpool(SHMBuffer(shm), (long)SHMBufferLength(shm), &pool->pool);
+    pool->Pool = NULL;
+    oserr = bpool(SHMBuffer(shm), (long)SHMBufferLength(shm), &pool->Pool);
     if (oserr != OS_EOK) {
         free(pool);
         return oserr;
@@ -95,19 +97,19 @@ dma_pool_create(
 }
 
 oserr_t
-dma_pool_destroy(
-    _In_ struct dma_pool* pool)
+BufferPoolDestroy(
+    _In_ BufferPool_t* pool)
 {
-    free(pool->pool);
+    free(pool->Pool);
     free(pool);
     return OS_EOK;
 }
 
 oserr_t
-dma_pool_allocate(
-    _In_  struct dma_pool* pool,
-    _In_  size_t           length,
-    _Out_ void**           address_out)
+BufferPoolAllocate(
+    _In_  BufferPool_t* pool,
+    _In_  size_t        length,
+    _Out_ void**        addressOut)
 {
     void*     allocation;
     uintptr_t payload;
@@ -129,11 +131,11 @@ dma_pool_allocate(
     }
 
     total = rounded + mask + sizeof(void*);
-    if (total > SHMBufferLength(&pool->handle)) {
+    if (total > SHMBufferLength(&pool->Handle)) {
         return OS_EOOM;
     }
 
-    allocation = bget(pool->pool, (long)total);
+    allocation = bget(pool->Pool, (long)total);
     if (allocation == NULL) {
         return OS_EOOM;
     }
@@ -143,14 +145,14 @@ dma_pool_allocate(
     // free other buffers while DMA uses this one.
     payload = ((uintptr_t)allocation + sizeof(void*) + mask) & ~(uintptr_t)mask;
     memcpy((void*)(payload - sizeof(void*)), &allocation, sizeof(allocation));
-    *address_out = (void*)payload;
+    *addressOut = (void*)payload;
     return OS_EOK;
 }
 
 oserr_t
-dma_pool_free(
-    _In_ struct dma_pool* pool,
-    _In_ void*            address)
+BufferPoolFree(
+    _In_ BufferPool_t* pool,
+    _In_ void*         address)
 {
     void* allocation;
 
@@ -159,27 +161,27 @@ dma_pool_free(
         (const uint8_t*)address - sizeof(void*),
         sizeof(void*)
     );
-    brel(pool->pool, allocation);
+    brel(pool->Pool, allocation);
     return OS_EOK;
 }
 
 uuid_t
-dma_pool_handle(
-    _In_ struct dma_pool* pool)
+BufferPoolHandle(
+    _In_ BufferPool_t* pool)
 {
     if (pool == NULL) {
         return UUID_INVALID;
     }
-    return pool->handle.ID;
+    return pool->Handle.ID;
 }
 
 size_t
-dma_pool_offset(
-    _In_ struct dma_pool* pool,
-    _In_ void*            address)
+BufferPoolOffset(
+    _In_ BufferPool_t* pool,
+    _In_ void*         address)
 {
     if (pool == NULL || !address) {
         return 0;
     }
-    return (uintptr_t)address - (uintptr_t)SHMBuffer(&pool->handle);
+    return (uintptr_t)address - (uintptr_t)SHMBuffer(&pool->Handle);
 }
