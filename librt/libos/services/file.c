@@ -15,9 +15,9 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include <ddk/service.h>
-#include <ddk/convert.h>
-#include <ddk/convert/grants.h>
+#include <os/services/lookup.h>
+#include <os/convert/file.h>
+#include <os/convert/grants.h>
 #include <gracht/link/vali.h>
 #include <internal/_gracht.h>
 #include <internal/_io.h>
@@ -25,6 +25,7 @@
 #include <io.h>
 #include <os/services/file.h>
 #include <os/handle.h>
+#include <os/mollenos.h>
 #include <sys_file_service_client.h>
 
 oserr_t
@@ -34,7 +35,7 @@ OSOpenPath(
         _In_  unsigned int permissions,
         _Out_ OSHandle_t*  handleOut)
 {
-    struct vali_link_message msg = VALI_MSG_INIT_HANDLE(ServiceGetFile());
+    struct vali_link_message msg = VALI_MSG_INIT_HANDLE(OSServiceGetFile());
     oserr_t                  oserr;
     int                      status;
     struct sys_grant_token   wireToken;
@@ -86,7 +87,7 @@ OSMakeDirectory(
         _In_ const char*  path,
         _In_ unsigned int permissions)
 {
-    struct vali_link_message msg = VALI_MSG_INIT_HANDLE(ServiceGetFile());
+    struct vali_link_message msg = VALI_MSG_INIT_HANDLE(OSServiceGetFile());
     oserr_t                  oserr;
     int                      status;
 
@@ -122,7 +123,7 @@ OSReadDirectory(
         _In_ uuid_t              handle,
         _In_ OSDirectoryEntry_t* entry)
 {
-    struct vali_link_message   msg = VALI_MSG_INIT_HANDLE(ServiceGetFile());
+    struct vali_link_message   msg = VALI_MSG_INIT_HANDLE(OSServiceGetFile());
     struct sys_directory_entry sysEntry;
     oserr_t                    oserr;
     int                        status;
@@ -153,7 +154,7 @@ OSSeekFile(
         _In_ uuid_t        handle,
         _In_ UInteger64_t* position)
 {
-    struct vali_link_message msg = VALI_MSG_INIT_HANDLE(ServiceGetFile());
+    struct vali_link_message msg = VALI_MSG_INIT_HANDLE(OSServiceGetFile());
     oserr_t                  oserr;
     int                      status;
 
@@ -182,7 +183,7 @@ oserr_t
 OSUnlinkPath(
         _In_ const char* path)
 {
-    struct vali_link_message msg = VALI_MSG_INIT_HANDLE(ServiceGetFile());
+    struct vali_link_message msg = VALI_MSG_INIT_HANDLE(OSServiceGetFile());
     oserr_t                  oserr;
     int                      status;
 
@@ -211,7 +212,7 @@ OSMoveFile(
         _In_ const char* to,
         _In_ bool        copy)
 {
-    struct vali_link_message msg = VALI_MSG_INIT_HANDLE(ServiceGetFile());
+    struct vali_link_message msg = VALI_MSG_INIT_HANDLE(OSServiceGetFile());
     oserr_t                  oserr;
     int                      status;
 
@@ -241,7 +242,7 @@ OSLinkPath(
         _In_ const char* to,
         _In_ bool        symbolic)
 {
-    struct vali_link_message msg = VALI_MSG_INIT_HANDLE(ServiceGetFile());
+    struct vali_link_message msg = VALI_MSG_INIT_HANDLE(OSServiceGetFile());
     oserr_t                  oserr;
     int                      status;
 
@@ -271,7 +272,7 @@ OSGetFilePosition(
         _In_ uuid_t        handle,
         _In_ UInteger64_t* position)
 {
-    struct vali_link_message msg = VALI_MSG_INIT_HANDLE(ServiceGetFile());
+    struct vali_link_message msg = VALI_MSG_INIT_HANDLE(OSServiceGetFile());
     oserr_t                  oserr;
     int                      status;
 
@@ -303,7 +304,7 @@ OSGetFileSize(
         _In_ uuid_t        handle,
         _In_ UInteger64_t* size)
 {
-    struct vali_link_message msg = VALI_MSG_INIT_HANDLE(ServiceGetFile());
+    struct vali_link_message msg = VALI_MSG_INIT_HANDLE(OSServiceGetFile());
     oserr_t                  oserr;
     int                      status;
 
@@ -335,7 +336,7 @@ OSSetFileSize(
         _In_ uuid_t        handle,
         _In_ UInteger64_t* size)
 {
-    struct vali_link_message msg = VALI_MSG_INIT_HANDLE(ServiceGetFile());
+    struct vali_link_message msg = VALI_MSG_INIT_HANDLE(OSServiceGetFile());
     oserr_t                  oserr;
     int                      status;
 
@@ -446,7 +447,7 @@ ChangeFileHandleAccessFromFd(
         _In_ int          fileDescriptor,
         _In_ unsigned int access)
 {
-    struct vali_link_message msg    = VALI_MSG_INIT_HANDLE(ServiceGetFile());
+    struct vali_link_message msg    = VALI_MSG_INIT_HANDLE(OSServiceGetFile());
     stdio_handle_t*          handle = stdio_handle_get(fileDescriptor);
     oserr_t                  oserr;
     int                      status;
@@ -476,7 +477,7 @@ GetFileLink(
         _In_ char*       linkPathBuffer,
         _In_ size_t      bufferLength)
 {
-    struct vali_link_message msg = VALI_MSG_INIT_HANDLE(ServiceGetFile());
+    struct vali_link_message msg = VALI_MSG_INIT_HANDLE(OSServiceGetFile());
     oserr_t                  oserr;
     int                      status;
     
@@ -499,7 +500,7 @@ GetFilePathFromFd(
     _In_ char*  buffer,
     _In_ size_t maxLength)
 {
-    struct vali_link_message msg    = VALI_MSG_INIT_HANDLE(ServiceGetFile());
+    struct vali_link_message msg    = VALI_MSG_INIT_HANDLE(OSServiceGetFile());
     stdio_handle_t*          handle = stdio_handle_get(fileDescriptor);
     oserr_t                  oserr;
     int                      status;
@@ -528,7 +529,7 @@ GetStorageInformationFromPath(
         _In_ int                    followLinks,
         _In_ OSStorageDescriptor_t* descriptor)
 {
-    struct vali_link_message   msg = VALI_MSG_INIT_HANDLE(ServiceGetFile());
+    struct vali_link_message   msg = VALI_MSG_INIT_HANDLE(OSServiceGetFile());
     oserr_t                    oserr;
     int                        status;
     struct sys_disk_descriptor gdescriptor;
@@ -561,7 +562,7 @@ GetStorageInformationFromFd(
         _In_ int                    fileDescriptor,
         _In_ OSStorageDescriptor_t* descriptor)
 {
-    struct vali_link_message   msg    = VALI_MSG_INIT_HANDLE(ServiceGetFile());
+    struct vali_link_message   msg    = VALI_MSG_INIT_HANDLE(OSServiceGetFile());
     stdio_handle_t*            handle = stdio_handle_get(fileDescriptor);
     oserr_t                    oserr;
     int                        status;
@@ -595,7 +596,7 @@ GetFileSystemInformationFromPath(
         _In_ int                       followLinks,
         _In_ OSFileSystemDescriptor_t* descriptor)
 {
-    struct vali_link_message         msg = VALI_MSG_INIT_HANDLE(ServiceGetFile());
+    struct vali_link_message         msg = VALI_MSG_INIT_HANDLE(OSServiceGetFile());
     oserr_t                          oserr;
     int                              status;
     struct sys_filesystem_descriptor gdescriptor;
@@ -628,7 +629,7 @@ GetFileSystemInformationFromFd(
         _In_ int                       fileDescriptor,
         _In_ OSFileSystemDescriptor_t* descriptor)
 {
-    struct vali_link_message         msg    = VALI_MSG_INIT_HANDLE(ServiceGetFile());
+    struct vali_link_message         msg    = VALI_MSG_INIT_HANDLE(OSServiceGetFile());
     stdio_handle_t*                  handle = stdio_handle_get(fileDescriptor);
     oserr_t                          oserr;
     int                              status;
@@ -662,7 +663,7 @@ GetFileInformationFromPath(
         _In_ int                 followLinks,
         _In_ OSFileDescriptor_t* descriptor)
 {
-    struct vali_link_message   msg = VALI_MSG_INIT_HANDLE(ServiceGetFile());
+    struct vali_link_message   msg = VALI_MSG_INIT_HANDLE(OSServiceGetFile());
     oserr_t                    oserr;
     int                        status;
     struct sys_file_descriptor gdescriptor;
@@ -695,7 +696,7 @@ GetFileInformationFromFd(
         _In_ int                 fileDescriptor,
         _In_ OSFileDescriptor_t* descriptor)
 {
-    struct vali_link_message   msg    = VALI_MSG_INIT_HANDLE(ServiceGetFile());
+    struct vali_link_message   msg    = VALI_MSG_INIT_HANDLE(OSServiceGetFile());
     stdio_handle_t*            handle = stdio_handle_get(fileDescriptor);
     oserr_t                    oserr;
     int                        status;

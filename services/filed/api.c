@@ -23,7 +23,7 @@
 //#define __TRACE
 
 #include <ddk/convert.h>
-#include <ddk/convert/grants.h>
+#include <os/convert/grants.h>
 #include <ddk/utils.h>
 #include <ddk/service-caller.h>
 #include <os/grants.h>
@@ -807,7 +807,7 @@ void sys_file_ststat_invocation(struct gracht_message* message, const uuid_t pro
 
     oserr = VFSNodeStatStorageHandle(resourceID, &stats);
     if (oserr == OS_EOK) {
-        to_sys_disk_descriptor_dkk(&stats, &result);
+        to_sys_disk_descriptor_ddk(&stats, &result);
     }
     sys_file_ststat_response(message, oserr, &result);
 }
@@ -833,7 +833,7 @@ void sys_file_ststat_path_invocation(struct gracht_message* message, const uuid_
 
     oserr = VFSNodeStatStorage(fsScope, filePath, followLinks, &stats);
     if (oserr == OS_EOK) {
-        to_sys_disk_descriptor_dkk(&stats, &gdescriptor);
+        to_sys_disk_descriptor_ddk(&stats, &gdescriptor);
     }
     sys_file_ststat_path_response(message, oserr, &gdescriptor);
 }

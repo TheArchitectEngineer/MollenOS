@@ -16,8 +16,8 @@
  *
  */
 
-#include <ddk/convert/grants.h>
-#include <ddk/service.h>
+#include <os/convert/grants.h>
+#include <os/services/lookup.h>
 #include <gracht/link/vali.h>
 #include <internal/_gracht.h>
 #include <internal/_utils.h>
@@ -36,7 +36,7 @@ __TransferFileBuffer(
     _In_  bool                 write,
     _Out_ size_t*              bytesTransferred)
 {
-    struct vali_link_message msg = VALI_MSG_INIT_HANDLE(ServiceGetFile());
+    struct vali_link_message msg = VALI_MSG_INIT_HANDLE(OSServiceGetFile());
     struct sys_shm_transfer  description;
     unsigned int             scope = GrantTokenScopeRead;
     size_t                   length;

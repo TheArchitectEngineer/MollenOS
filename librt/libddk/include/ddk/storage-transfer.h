@@ -22,7 +22,7 @@
 #ifndef __DDK_STORAGE_TRANSFER_H__
 #define __DDK_STORAGE_TRANSFER_H__
 
-#include <ddk/convert/grants.h>
+#include <os/convert/grants.h>
 #include <os/shm.h>
 
 /**

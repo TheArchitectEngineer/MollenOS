@@ -15,7 +15,7 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include <ddk/convert/inheritance.h>
+#include <os/convert/inheritance.h>
 #include <internal/_io.h>
 #include <os/handle.h>
 #include <os/types/file.h>

@@ -29,7 +29,7 @@
 #include <ddk/utils.h>
 #include <internal/_syscalls.h> // for Syscall_ThreadCreate
 #include <internal/_process.h>
-#include <ddk/convert/inheritance.h>
+#include <os/convert/inheritance.h>
 #include <os/threads.h>
 #include <os/usched/cond.h>
 #include <os/usched/job.h>

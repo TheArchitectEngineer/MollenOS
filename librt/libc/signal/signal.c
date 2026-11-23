@@ -18,7 +18,7 @@
 #define __TRACE
 
 #include <assert.h>
-#include <ddk/service.h>
+#include <os/services/lookup.h>
 #include <os/syslog.h>
 #include <errno.h>
 #include <gracht/link/vali.h>
@@ -104,7 +104,7 @@ __ReportCrash(
     _In_ Context_t*   context,
     _In_ sig_element* signal)
 {
-    struct vali_link_message msg = VALI_MSG_INIT_HANDLE(ServiceGetProcess());
+    struct vali_link_message msg = VALI_MSG_INIT_HANDLE(OSServiceGetProcess());
     oserr_t                  oserr;
     oserr_t                  reportStatus;
     int                      status;

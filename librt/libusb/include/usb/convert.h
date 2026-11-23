@@ -20,7 +20,7 @@
 #define __USB_CONVERT_H__
 
 #include <usb/usb.h>
-#include <ddk/convert/grants.h>
+#include <os/convert/grants.h>
 #include <ctt_usbhost_service.h>
 
 static inline unsigned int

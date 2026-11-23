@@ -19,8 +19,8 @@
 #define __need_quantity
 
 #include <assert.h>
-#include <ddk/service.h>
-#include <ddk/convert/grants.h>
+#include <os/services/lookup.h>
+#include <os/convert/grants.h>
 #include <os/syslog.h>
 #include <errno.h>
 #include <gracht/link/vali.h>
@@ -227,7 +227,7 @@ __get_startup_info(void)
     OSHandle_t               mapping;
     SHMTransfer_t            transfer;
     struct sys_shm_transfer  destination;
-    struct vali_link_message msg = VALI_MSG_INIT_HANDLE(ServiceGetProcess());
+    struct vali_link_message msg = VALI_MSG_INIT_HANDLE(OSServiceGetProcess());
     uuid_t                   processID = UUID_INVALID;
     uint32_t                 bytesWritten = 0;
     oserr_t                  oserr;

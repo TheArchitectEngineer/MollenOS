@@ -24,7 +24,8 @@
 #include "os/services/sharedobject.h"
 #include <strings.h>
 
-#include <ddk/service.h>
+#include <os/services/lookup.h>
+#include <os/mollenos.h>
 #include <gracht/link/vali.h>
 #include <sys_library_service_client.h>
 
@@ -61,7 +62,7 @@ Handle_t
 OSLibraryLoad(
 	_In_ const char* SharedObject)
 {
-    struct vali_link_message msg = VALI_MSG_INIT_HANDLE(ServiceGetProcess());
+    struct vali_link_message msg = VALI_MSG_INIT_HANDLE(OSServiceGetProcess());
     SOInitializer_t          Initializer;
     struct library_element*  library;
     Handle_t                 handle = HANDLE_INVALID;
@@ -150,7 +151,7 @@ OSLibraryLookupFunction(
 
     assert(__crt_is_phoenix() == 0);
 
-    struct vali_link_message msg = VALI_MSG_INIT_HANDLE(ServiceGetProcess());
+    struct vali_link_message msg = VALI_MSG_INIT_HANDLE(OSServiceGetProcess());
     uintptr_t                functionAddress;
 
     sys_library_get_function(GetGrachtClient(), &msg.base, __crt_process_id(), (uintptr_t)handle, function);
@@ -212,7 +213,7 @@ OSLibraryUnload(
             initialize(DLL_ACTION_FINALIZE);
         }
 
-        struct vali_link_message msg = VALI_MSG_INIT_HANDLE(ServiceGetProcess());
+        struct vali_link_message msg = VALI_MSG_INIT_HANDLE(OSServiceGetProcess());
         sys_library_unload(GetGrachtClient(), &msg.base, __crt_process_id(), (uintptr_t)handle);
         gracht_client_await(GetGrachtClient(), &msg.base, GRACHT_AWAIT_ASYNC);
         sys_library_unload_result(GetGrachtClient(), &msg.base, &status);

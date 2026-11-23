@@ -128,7 +128,7 @@ void ctt_storage_stat_invocation(struct gracht_message* message, const uuid_t de
         TRACE("[msd] [stat] sectorCount %llu, sectorSize %u",
             device->Descriptor.SectorCount,
             device->Descriptor.SectorSize);
-        to_sys_disk_descriptor_dkk(&device->Descriptor, &gdescriptor);
+        to_sys_disk_descriptor_ddk(&device->Descriptor, &gdescriptor);
         oserr = OS_EOK;
     }
     

@@ -19,8 +19,8 @@
 #define __need_minmax
 
 #include <assert.h>
-#include <ddk/convert/grants.h>
-#include <ddk/service.h>
+#include <os/convert/grants.h>
+#include <os/services/lookup.h>
 #include <os/syslog.h>
 #include <gracht/link/vali.h>
 #include <internal/_io.h>
@@ -267,7 +267,7 @@ OSProcessSpawn(
     _In_Opt_ OSProcessOptions_t*  options,
     _Out_    OSProcessIdentity_t* identityOut)
 {
-    struct vali_link_message         msg = VALI_MSG_INIT_HANDLE(ServiceGetProcess());
+    struct vali_link_message         msg = VALI_MSG_INIT_HANDLE(OSServiceGetProcess());
     struct sys_process_configuration configuration = { 0 };
     OSProcessIdentity_t              identity = { .Process = UUID_INVALID };
     OSProcessOptions_t               defaultOptions;
@@ -350,7 +350,7 @@ OSProcessJoin(
         _In_  size_t timeout,
         _Out_ int*   exitCodeOut)
 {
-    struct vali_link_message msg = VALI_MSG_INIT_HANDLE(ServiceGetProcess());
+    struct vali_link_message msg = VALI_MSG_INIT_HANDLE(OSServiceGetProcess());
     oserr_t                  osStatus;
     
     sys_process_join(GetGrachtClient(), &msg.base, handle, timeout);
@@ -364,7 +364,7 @@ OSProcessSignal(
         _In_ uuid_t handle,
         _In_ int    signal)
 {
-    struct vali_link_message msg = VALI_MSG_INIT_HANDLE(ServiceGetProcess());
+    struct vali_link_message msg = VALI_MSG_INIT_HANDLE(OSServiceGetProcess());
     oserr_t                  oserr;
     
     sys_process_signal(GetGrachtClient(), &msg.base, OSProcessCurrentID(), handle, signal);
@@ -377,7 +377,7 @@ oserr_t
 OSProcessTerminate(
         _In_ int exitCode)
 {
-    struct vali_link_message msg   = VALI_MSG_INIT_HANDLE(ServiceGetProcess());
+    struct vali_link_message msg   = VALI_MSG_INIT_HANDLE(OSServiceGetProcess());
     oserr_t                  oserr = OS_EOK;
 
     if (!__crt_is_phoenix()) {
@@ -398,7 +398,7 @@ oserr_t
 OSProcessTickBase(
     _Out_ clock_t* tickOut)
 {
-    struct vali_link_message msg = VALI_MSG_INIT_HANDLE(ServiceGetProcess());
+    struct vali_link_message msg = VALI_MSG_INIT_HANDLE(OSServiceGetProcess());
     oserr_t               status;
     UInteger64_t          tick;
 
@@ -440,7 +440,7 @@ OSProcessCurrentName(
         _In_ char*  buffer,
         _In_ size_t maxLength)
 {
-    struct vali_link_message msg = VALI_MSG_INIT_HANDLE(ServiceGetProcess());
+    struct vali_link_message msg = VALI_MSG_INIT_HANDLE(OSServiceGetProcess());
     oserr_t               status;
 
     if (buffer == NULL && maxLength == 0) {
@@ -464,7 +464,7 @@ OSProcessAssemblyDirectory(
         _In_ char*  buffer,
         _In_ size_t maxLength)
 {
-    struct vali_link_message msg = VALI_MSG_INIT_HANDLE(ServiceGetProcess());
+    struct vali_link_message msg = VALI_MSG_INIT_HANDLE(OSServiceGetProcess());
     oserr_t               status;
 
     if (buffer == NULL || maxLength == 0) {
@@ -491,7 +491,7 @@ OSProcessWorkingDirectory(
         _In_ char*  buffer,
         _In_ size_t maxLength)
 {
-    struct vali_link_message msg = VALI_MSG_INIT_HANDLE(ServiceGetProcess());
+    struct vali_link_message msg = VALI_MSG_INIT_HANDLE(OSServiceGetProcess());
     oserr_t               status;
 
     if (buffer == NULL || maxLength == 0) {
@@ -516,7 +516,7 @@ oserr_t
 OSProcessSetWorkingDirectory(
     _In_ const char* path)
 {
-    struct vali_link_message msg = VALI_MSG_INIT_HANDLE(ServiceGetProcess());
+    struct vali_link_message msg = VALI_MSG_INIT_HANDLE(OSServiceGetProcess());
     oserr_t               status;
 
     if (path == NULL) {

@@ -19,7 +19,7 @@
 //#define __TRACE
 
 #include <os/syslog.h>
-#include <ddk/service.h>
+#include <os/services/lookup.h>
 #include <gracht/link/vali.h>
 #include <internal/_utils.h>
 #include <os/mollenos.h>
@@ -103,7 +103,7 @@ OSGetFullPath(
         _In_ char*       buffer,
         _In_ size_t      maxLength)
 {
-    struct vali_link_message msg = VALI_MSG_INIT_HANDLE(ServiceGetFile());
+    struct vali_link_message msg = VALI_MSG_INIT_HANDLE(OSServiceGetFile());
     oserr_t                  status;
 
     if (path == NULL || buffer == NULL || maxLength == 0) {

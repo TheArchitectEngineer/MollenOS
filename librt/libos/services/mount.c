@@ -15,11 +15,12 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include <ddk/convert.h>
+#include <os/convert/file.h>
 #include <ds/list.h>
 #include <gracht/link/vali.h>
 #include <internal/_utils.h>
 #include <os/services/mount.h>
+#include <os/services/lookup.h>
 #include "os/services/process.h"
 
 #include <sys_mount_service_client.h>
@@ -31,7 +32,7 @@ OSMount(
         _In_ const char*  type,
         _In_ unsigned int flags)
 {
-    struct vali_link_message msg = VALI_MSG_INIT_HANDLE(ServiceGetFile());
+    struct vali_link_message msg = VALI_MSG_INIT_HANDLE(OSServiceGetFile());
     oserr_t                  status;
 
     sys_mount_mount(
@@ -52,7 +53,7 @@ oserr_t
 OSUnmount(
         _In_ const char* path)
 {
-    struct vali_link_message msg = VALI_MSG_INIT_HANDLE(ServiceGetFile());
+    struct vali_link_message msg = VALI_MSG_INIT_HANDLE(OSServiceGetFile());
     oserr_t                  status;
 
     sys_mount_unmount(

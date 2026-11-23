@@ -16,7 +16,7 @@
  */
 
 #include <ddk/convert.h>
-#include <ddk/convert/grants.h>
+#include <os/convert/grants.h>
 #include <ddk/utils.h>
 #include <gracht/link/vali.h>
 #include <internal/_gracht.h>

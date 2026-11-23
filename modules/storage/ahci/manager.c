@@ -193,7 +193,7 @@ __RegisterStorage(
         _In_ unsigned int Flags)
 {
     int                      status;
-    struct vali_link_message msg = VALI_MSG_INIT_HANDLE(ServiceGetFile());
+    struct vali_link_message msg = VALI_MSG_INIT_HANDLE(OSServiceGetFile());
 
     status = sys_storage_register(GetGrachtClient(), &msg.base, ProtocolServerId, DeviceId, Flags);
     if (status) {
@@ -213,7 +213,7 @@ __UnregisterStorage(
         _In_ uint8_t forced)
 {
     int                      status;
-    struct vali_link_message msg = VALI_MSG_INIT_HANDLE(ServiceGetFile());
+    struct vali_link_message msg = VALI_MSG_INIT_HANDLE(OSServiceGetFile());
 
     status = sys_storage_unregister(
         GetGrachtClient(),
@@ -359,7 +359,7 @@ void ctt_storage_stat_invocation(struct gracht_message* message, const uuid_t de
     oserr_t                 status = OS_ENOENT;
     AhciDevice_t*              device = AhciManagerGetDevice(deviceId);
     if (device) {
-        to_sys_disk_descriptor_dkk(&device->Descriptor, &gdescriptor);
+        to_sys_disk_descriptor_ddk(&device->Descriptor, &gdescriptor);
         status = OS_EOK;
     }
     

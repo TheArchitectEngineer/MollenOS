@@ -7,10 +7,10 @@
  * (at your option) any later version.
  */
 
-#ifndef __DDK_CONVERT_INHERITANCE_H__
-#define __DDK_CONVERT_INHERITANCE_H__
+#ifndef __OS_CONVERT_INHERITANCE_H__
+#define __OS_CONVERT_INHERITANCE_H__
 
-#include <ddk/convert/grants.h>
+#include <os/convert/grants.h>
 #include <os/types/process.h>
 
 /**
@@ -174,4 +174,4 @@ error:
     return status;
 }
 
-#endif //!__DDK_CONVERT_INHERITANCE_H__
+#endif //!__OS_CONVERT_INHERITANCE_H__

@@ -16,16 +16,16 @@
  * You should have received a copy of the GNU General Public License
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  *
- *
- * Gracht types conversion methods
- * Implements conversion methods to convert between formats used in gracht services
- * and OS types.
+ * Conversions between the device, filesystem and USB types of the DDK and the
+ * structures of the gracht protocols. The conversions of the file and storage
+ * types of libos are in os/convert/file.h.
  */
 
 #ifndef __DDK_CONVERT_H__
 #define __DDK_CONVERT_H__
 
-#include <ddk/convert/grants.h>
+#include <os/convert/file.h>
+#include <os/convert/grants.h>
 
 #include <ddk/storage.h>
 #include <ddk/devices/device.h>
@@ -46,31 +46,6 @@
 #include <ctt_filesystem_service.h>
 #include <ctt_usbhost_service.h>
 
-static void from_sys_timestamp(struct sys_timestamp* in, OSTimestamp_t* out)
-{
-    out->Seconds = in->tv_sec;
-    out->Nanoseconds = in->tv_nsec;
-}
-
-static void to_sys_timestamp(OSTimestamp_t* in, struct sys_timestamp* out)
-{
-    out->tv_sec = in->Seconds;
-    out->tv_nsec = in->Nanoseconds;
-}
-
-static void from_sys_disk_descriptor(struct sys_disk_descriptor* in, OSStorageDescriptor_t* out)
-{
-    size_t len = strnlen(in->serial, sizeof(out->SerialNumber) - 1);
-
-    out->Id = 0;
-    out->Flags = (unsigned int)in->flags;
-    out->SectorSize = in->geometry.sector_size;
-    out->SectorsTotal.QuadPart = in->geometry.sectors_total;
-
-    memcpy(&out->SerialNumber[0], in->serial, len);
-    out->SerialNumber[len] = 0;
-}
-
 static void from_sys_disk_descriptor_ddk(struct sys_disk_descriptor* in, StorageDescriptor_t* out)
 {
     size_t serialLen = strnlen(in->serial, sizeof(out->Serial) - 1);
@@ -90,7 +65,7 @@ static void from_sys_disk_descriptor_ddk(struct sys_disk_descriptor* in, Storage
     out->Model[modelLen] = 0;
 }
 
-static void to_sys_disk_descriptor_dkk(StorageDescriptor_t* in, struct sys_disk_descriptor* out)
+static void to_sys_disk_descriptor_ddk(StorageDescriptor_t* in, struct sys_disk_descriptor* out)
 {
     out->device_id = in->DeviceID;
     out->driver_id = in->DriverID;
@@ -101,48 +76,6 @@ static void to_sys_disk_descriptor_dkk(StorageDescriptor_t* in, struct sys_disk_
     out->geometry.sectors_per_cylinder = in->SectorsPerCylinder;
     out->serial = &in->Serial[0];
     out->model = &in->Model[0];
-}
-
-static void from_sys_filesystem_descriptor(struct sys_filesystem_descriptor* in, OSFileSystemDescriptor_t* out)
-{
-    size_t len = strnlen(in->serial, sizeof(out->SerialNumber) - 1);
-
-    out->Id = in->id;
-    out->Flags = in->flags;
-    out->BlockSize = in->block_size;
-    out->BlocksPerSegment = in->blocks_per_segment;
-    out->MaxFilenameLength = in->max_filename_length;
-    out->SegmentsFree.QuadPart = in->segments_free;
-    out->SegmentsTotal.QuadPart = in->segments_total;
-
-    memcpy(&out->SerialNumber[0], in->serial, len);
-    out->SerialNumber[len] = 0;
-}
-
-static void from_sys_file_descriptor(struct sys_file_descriptor* in, OSFileDescriptor_t* out)
-{
-    out->Id = in->id;
-    out->StorageId = in->storageId;
-    out->Flags = (unsigned int)in->flags;
-    out->Permissions = (unsigned int)in->permissions;
-    out->Size.QuadPart = in->size;
-
-    from_sys_timestamp(&in->created, &out->CreatedAt);
-    from_sys_timestamp(&in->accessed, &out->AccessedAt);
-    from_sys_timestamp(&in->modified, &out->ModifiedAt);
-}
-
-static void to_sys_file_descriptor(OSFileDescriptor_t* in, struct sys_file_descriptor* out)
-{
-    out->id = in->Id;
-    out->storageId = in->StorageId;
-    out->flags = (enum sys_file_flags)in->Flags;
-    out->permissions = (enum sys_file_permissions)in->Permissions;
-    out->size = in->Size.QuadPart;
-
-    to_sys_timestamp(&in->CreatedAt, &out->created);
-    to_sys_timestamp(&in->AccessedAt, &out->accessed);
-    to_sys_timestamp(&in->ModifiedAt, &out->modified);
 }
 
 static char* to_protocol_string(const char* in)

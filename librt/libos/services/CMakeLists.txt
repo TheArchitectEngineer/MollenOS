@@ -1,14 +1,15 @@
 
 add_library(libos-services STATIC
-        file.c
-        file_transfer.c
-        fileview.c
-        mount.c
-        net.c
-        path.c
-        process.c
-        shared_objects.c
-        syslog.c
+    file.c
+    file_transfer.c
+    fileview.c
+    lookup.c
+    mount.c
+    net.c
+    path.c
+    process.c
+    shared_objects.c
+    syslog.c
 )
 target_compile_definitions(libos-services PRIVATE -D__OSLIB_C_IMPLEMENTATION)
 target_include_directories(libos-services PRIVATE

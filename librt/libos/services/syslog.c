@@ -15,7 +15,7 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include <ddk/service.h>
+#include <os/services/lookup.h>
 #include <gracht/link/vali.h>
 #include <internal/_syscalls.h>
 #include <internal/_utils.h>
@@ -29,7 +29,7 @@ OSSystemLog(
         _In_ enum OSSysLogLevel level,
         _In_ const char*        fmt, ...)
 {
-    struct vali_link_message msg = VALI_MSG_INIT_HANDLE(ServiceGetSysLog());
+    struct vali_link_message msg = VALI_MSG_INIT_HANDLE(OSServiceGetSysLog());
     va_list                  args;
     char                     buffer[256];
 

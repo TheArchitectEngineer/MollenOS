@@ -33,7 +33,7 @@
 
 static int __SubscribeToFileEvents(void)
 {
-    struct vali_link_message msg = VALI_MSG_INIT_HANDLE(ServiceGetFile());
+    struct vali_link_message msg = VALI_MSG_INIT_HANDLE(OSServiceGetFile());
     return sys_file_subscribe(GetGrachtClient(), &msg.base);
 }
 
@@ -43,7 +43,7 @@ void ServiceInitialize(
     // Wait for the file server to present itself, if it doesn't come online after 2 seconds
     // of waiting, then assume that the file server is dead or not included. In this case
     // served will kill itself as well.
-    if (ServiceWaitForFile(2000) == OS_ETIMEOUT) {
+    if (OSServiceWaitForFile(2000) == OS_ETIMEOUT) {
         ERROR("ServiceInitialize filed never started up, gave up after 2 seconds");
         exit(-ENOTSUP);
     }

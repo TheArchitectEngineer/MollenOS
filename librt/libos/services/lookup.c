@@ -21,8 +21,8 @@
 //#define __TRACE
 
 #include <internal/_syscalls.h>
-#include <ddk/service.h>
-#include <ddk/utils.h>
+#include <os/services/lookup.h>
+#include <os/syslog.h>
 #include <os/threads.h>
 #include <threads.h>
 
@@ -108,73 +108,73 @@ __WaitForService(
     return OS_EOK;
 }
 
-uuid_t ServiceGetDevice(void)
+uuid_t OSServiceGetDevice(void)
 {
     return __GetService(SERVICE_INDEX_DEVICE);
 }
 
-uuid_t ServiceGetUsb(void)
+uuid_t OSServiceGetUsb(void)
 {
     return __GetService(SERVICE_INDEX_USB);
 }
 
-uuid_t ServiceGetProcess(void)
+uuid_t OSServiceGetProcess(void)
 {
     return __GetService(SERVICE_INDEX_PROCESS);
 }
 
-uuid_t ServiceGetFile(void)
+uuid_t OSServiceGetFile(void)
 {
     return __GetService(SERVICE_INDEX_FILE);
 }
 
-uuid_t ServiceGetNet(void)
+uuid_t OSServiceGetNet(void)
 {
     return __GetService(SERVICE_INDEX_NET);
 }
 
-uuid_t ServiceGetSysLog(void)
+uuid_t OSServiceGetSysLog(void)
 {
     return __GetService(SERVICE_INDEX_SYSLOG);
 }
 
 oserr_t
-ServiceWaitForDevice(
+OSServiceWaitForDevice(
     _In_ size_t timeout)
 {
     return __WaitForService(SERVICE_INDEX_DEVICE, timeout);
 }
 
 oserr_t
-ServiceWaitForUsb(
+OSServiceWaitForUsb(
     _In_ size_t timeout)
 {
     return __WaitForService(SERVICE_INDEX_USB, timeout);
 }
 
 oserr_t
-ServiceWaitForProcess(
+OSServiceWaitForProcess(
     _In_ size_t timeout)
 {
     return __WaitForService(SERVICE_INDEX_PROCESS, timeout);
 }
 
 oserr_t
-ServiceWaitForFile(
+OSServiceWaitForFile(
     _In_ size_t timeout)
 {
     return __WaitForService(SERVICE_INDEX_FILE, timeout);
 }
 
 oserr_t
-ServiceWaitForNet(
+OSServiceWaitForNet(
     _In_ size_t timeout)
 {
     return __WaitForService(SERVICE_INDEX_NET, timeout);
 }
 
 oserr_t
-ServiceWaitForSysLog(
+OSServiceWaitForSysLog(
     _In_ size_t timeout)
 {
     return __WaitForService(SERVICE_INDEX_SYSLOG, timeout);

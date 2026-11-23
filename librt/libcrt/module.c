@@ -18,7 +18,7 @@
 
 #define __TRACE
 
-#include <ddk/service.h>
+#include <os/services/lookup.h>
 #include <os/syslog.h>
 #include <gracht/link/vali.h>
 #include <gracht/server.h>
@@ -115,7 +115,7 @@ __ModuleMain(
 
     // Notify the devicemanager of our successful startup
     if (moduleOptions.ID != UUID_INVALID) {
-        struct vali_link_message msg = VALI_MSG_INIT_HANDLE(ServiceGetDevice());
+        struct vali_link_message msg = VALI_MSG_INIT_HANDLE(OSServiceGetDevice());
         sys_device_notify(
                 GetGrachtClient(),
                 &msg.base,

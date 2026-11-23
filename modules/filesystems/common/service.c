@@ -31,7 +31,7 @@ extern int __crt_get_server_iod(void);
 oserr_t
 OnLoad(void)
 {
-    struct vali_link_message msg = VALI_MSG_INIT_HANDLE(ServiceGetFile());
+    struct vali_link_message msg = VALI_MSG_INIT_HANDLE(OSServiceGetFile());
 
     // register the filesystem protocol so we can handle the filesystem requests
     gracht_server_register_protocol(__crt_get_module_server(), &ctt_filesystem_server_protocol);

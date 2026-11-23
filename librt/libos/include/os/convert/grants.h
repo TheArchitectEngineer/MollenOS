@@ -16,8 +16,8 @@
  *
  */
 
-#ifndef __DDK_CONVERT_GRANTS_H__
-#define __DDK_CONVERT_GRANTS_H__
+#ifndef __OS_CONVERT_GRANTS_H__
+#define __OS_CONVERT_GRANTS_H__
 
 #include <os/types/grants.h>
 #include <os/handle.h>
@@ -458,4 +458,4 @@ __SameSysSHMTransfer(
            left->requested_length == right->requested_length;
 }
 
-#endif //!__DDK_CONVERT_GRANTS_H__
+#endif //!__OS_CONVERT_GRANTS_H__

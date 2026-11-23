@@ -19,7 +19,7 @@
 
 #include <ioset.h>
 #include <ddk/convert.h>
-#include <ddk/convert/grants.h>
+#include <os/convert/grants.h>
 #include <ddk/utils.h>
 #include <fs/common.h>
 #include <os/handle.h>

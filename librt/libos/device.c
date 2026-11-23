@@ -16,8 +16,9 @@
  */
 
 #include <errno.h>
-#include <ddk/service.h>
+#include <os/services/lookup.h>
 #include <os/device.h>
+#include <os/mollenos.h>
 #include <gracht/link/vali.h>
 #include <internal/_utils.h>
 
@@ -31,7 +32,7 @@ OSDeviceIOCtl(
     _In_ void*               buffer,
     _In_ size_t              length)
 {
-    struct vali_link_message msg = VALI_MSG_INIT_HANDLE(ServiceGetDevice());
+    struct vali_link_message msg = VALI_MSG_INIT_HANDLE(OSServiceGetDevice());
     oserr_t                  oserr = OS_EPROTOCOL;
     uint8_t*                 u8 = buffer;
     int                      status;

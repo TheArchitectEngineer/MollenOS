@@ -34,7 +34,7 @@ UsbControllerRegister(
     _In_ enum USBControllerKind type,
     _In_ int                    portCount)
 {
-    struct vali_link_message msg          = VALI_MSG_INIT_HANDLE(ServiceGetUsb());
+    struct vali_link_message msg          = VALI_MSG_INIT_HANDLE(OSServiceGetUsb());
     uuid_t                   serverHandle = GetNativeHandle(__crt_get_server_iod());
     struct sys_device        protoDevice;
     oserr_t                  oserr;
@@ -65,7 +65,7 @@ void
 UsbControllerUnregister(
     _In_ uuid_t deviceID)
 {
-    struct vali_link_message msg = VALI_MSG_INIT_HANDLE(ServiceGetUsb());
+    struct vali_link_message msg = VALI_MSG_INIT_HANDLE(OSServiceGetUsb());
     int                      status;
 
     status = sys_usb_unregister_controller(
@@ -86,7 +86,7 @@ UsbHubRegister(
     _In_ int          portCount,
     _In_ uint16_t     characteristics)
 {
-    struct vali_link_message msg          = VALI_MSG_INIT_HANDLE(ServiceGetUsb());
+    struct vali_link_message msg          = VALI_MSG_INIT_HANDLE(OSServiceGetUsb());
     uuid_t                   serverHandle = GetNativeHandle(__crt_get_server_iod());
     int                      status;
     oserr_t                  hubStatus;
@@ -132,7 +132,7 @@ oserr_t
 UsbHubUnregister(
     _In_ uuid_t deviceId)
 {
-    struct vali_link_message msg = VALI_MSG_INIT_HANDLE(ServiceGetUsb());
+    struct vali_link_message msg = VALI_MSG_INIT_HANDLE(OSServiceGetUsb());
     int                      status;
 
     status = sys_usb_unregister_hub(GetGrachtClient(), &msg.base, deviceId);
@@ -148,7 +148,7 @@ UsbEventPort(
     _In_ uuid_t  DeviceId,
     _In_ uint8_t PortAddress)
 {
-    struct vali_link_message msg = VALI_MSG_INIT_HANDLE(ServiceGetUsb());
+    struct vali_link_message msg = VALI_MSG_INIT_HANDLE(OSServiceGetUsb());
     int                      status;
 
     status = sys_usb_port_event(
@@ -169,7 +169,7 @@ UsbPortError(
     _In_ uuid_t  deviceId,
     _In_ uint8_t portAddress)
 {
-    struct vali_link_message msg = VALI_MSG_INIT_HANDLE(ServiceGetUsb());
+    struct vali_link_message msg = VALI_MSG_INIT_HANDLE(OSServiceGetUsb());
     int                      status;
 
     status = sys_usb_port_error(GetGrachtClient(), &msg.base, deviceId, portAddress);
@@ -184,7 +184,7 @@ oserr_t
 UsbQueryControllerCount(
     _Out_ int* ControllerCount)
 {
-    struct vali_link_message msg = VALI_MSG_INIT_HANDLE(ServiceGetUsb());
+    struct vali_link_message msg = VALI_MSG_INIT_HANDLE(OSServiceGetUsb());
     int                      count;
     int                      status;
 
@@ -220,7 +220,7 @@ UsbQueryController(
     _In_ int                    Index,
     _In_ USBControllerDevice_t* Controller)
 {
-    struct vali_link_message msg = VALI_MSG_INIT_HANDLE(ServiceGetUsb());
+    struct vali_link_message msg = VALI_MSG_INIT_HANDLE(OSServiceGetUsb());
     uint32_t                 controllerLength = sizeof(struct USBControllerDevice);
     int                      status;
 

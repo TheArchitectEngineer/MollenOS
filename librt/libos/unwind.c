@@ -16,7 +16,7 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include <ddk/service.h>
+#include <os/services/lookup.h>
 #include <gracht/link/vali.h>
 #include <internal/_utils.h>
 #include <os/types/process.h>
@@ -31,7 +31,7 @@ ProcessGetLibraryHandles(
     _In_  Handle_t* ModuleList,
     _Out_ int*      ModuleCountOut)
 {
-    struct vali_link_message msg = VALI_MSG_INIT_HANDLE(ServiceGetProcess());
+    struct vali_link_message msg = VALI_MSG_INIT_HANDLE(OSServiceGetProcess());
     uint32_t                 moduleCount = PROCESS_MAXMODULES;
 
     // Initialize it to 0

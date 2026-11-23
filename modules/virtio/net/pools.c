@@ -19,7 +19,7 @@
  */
 
 #include <ddk/utils.h>
-#include <ddk/convert/grants.h>
+#include <os/convert/grants.h>
 #include <stdlib.h>
 #include <string.h>
 

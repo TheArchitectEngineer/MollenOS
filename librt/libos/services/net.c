@@ -16,7 +16,7 @@
  */
 
 #define __need_minmax
-#include <ddk/service.h>
+#include <os/services/lookup.h>
 #include <gracht/link/vali.h>
 #include <inet/socket.h>
 #include <internal/_gracht.h>
@@ -27,7 +27,7 @@
 #include <os/handle.h>
 #include <os/notification_queue.h>
 #include <os/shm.h>
-#include <ddk/convert/grants.h>
+#include <os/convert/grants.h>
 #include <os/services/net.h>
 #include <os/mutex.h>
 #include <sys_socket_service_client.h>
@@ -81,7 +81,7 @@ OSSocketShutdown(
     _In_ OSHandle_t*              handle,
     _In_ enum OSocketShutdownType type)
 {
-    struct vali_link_message msg = VALI_MSG_INIT_HANDLE(ServiceGetNet());
+    struct vali_link_message msg = VALI_MSG_INIT_HANDLE(OSServiceGetNet());
     enum sys_close_options   operation = __ToProtocolCloseOptions(type);
     oserr_t                  status;
 
@@ -246,7 +246,7 @@ OSSocketAcquire(
     _In_  uuid_t      referenceID,
     _Out_ OSHandle_t* handleOut)
 {
-    struct vali_link_message msg = VALI_MSG_INIT_HANDLE(ServiceGetNet());
+    struct vali_link_message msg = VALI_MSG_INIT_HANDLE(OSServiceGetNet());
     struct sys_socket_info   info = { 0 };
     oserr_t                  status;
 
@@ -282,7 +282,7 @@ OSSocketOpen(
     _In_  int         protocol,
     _Out_ OSHandle_t* handleOut)
 {
-    struct vali_link_message msg = VALI_MSG_INIT_HANDLE(ServiceGetNet());
+    struct vali_link_message msg = VALI_MSG_INIT_HANDLE(OSServiceGetNet());
     struct sys_grant_token   reference = { 0 };
     struct sys_socket_info   info = { 0 };
     oserr_t                  status;
@@ -315,7 +315,7 @@ OSSocketPair(
     _In_  OSHandle_t* sock0,
     _In_  OSHandle_t* sock1)
 {
-    struct vali_link_message msg = VALI_MSG_INIT_HANDLE(ServiceGetNet());
+    struct vali_link_message msg = VALI_MSG_INIT_HANDLE(OSServiceGetNet());
     oserr_t                  oserr;
 
     sys_socket_pair(GetGrachtClient(), &msg.base, sock0->ID, sock1->ID);
@@ -331,7 +331,7 @@ OSSocketAccept(
     _In_  socklen_t*       addressLength,
     _Out_ OSHandle_t*      handleOut)
 {
-    struct vali_link_message msg = VALI_MSG_INIT_HANDLE(ServiceGetNet());
+    struct vali_link_message msg = VALI_MSG_INIT_HANDLE(OSServiceGetNet());
     struct Socket*           source;
     struct sockaddr_storage  peerAddress = { 0 };
     uint32_t                 peerAddressLength = sizeof(struct sockaddr_storage);
@@ -399,7 +399,7 @@ OSSocketBind(
     _In_ const struct sockaddr* address,
     _In_ socklen_t              addressLength)
 {
-    struct vali_link_message msg = VALI_MSG_INIT_HANDLE(ServiceGetNet());
+    struct vali_link_message msg = VALI_MSG_INIT_HANDLE(OSServiceGetNet());
     oserr_t                  oserr = OS_EPROTOCOL;
 
     if (handle == NULL) {
@@ -429,7 +429,7 @@ OSSocketConnect(
     _In_ const struct sockaddr* address,
     _In_ socklen_t              addressLength)
 {
-    struct vali_link_message msg = VALI_MSG_INIT_HANDLE(ServiceGetNet());
+    struct vali_link_message msg = VALI_MSG_INIT_HANDLE(OSServiceGetNet());
     oserr_t                  oserr = OS_EPROTOCOL;
 
     if (handle == NULL) {
@@ -460,7 +460,7 @@ OSSocketAddress(
     _In_ struct sockaddr* address,
     _In_ socklen_t        addressMaxSize)
 {
-    struct vali_link_message msg = VALI_MSG_INIT_HANDLE(ServiceGetNet());
+    struct vali_link_message msg = VALI_MSG_INIT_HANDLE(OSServiceGetNet());
     oserr_t                  oserr = OS_EPROTOCOL;
     uint32_t                 decodedLength = addressMaxSize;
 
@@ -489,7 +489,7 @@ OSSocketListen(
     _In_ OSHandle_t* handle,
     _In_ int         queueSize)
 {
-    struct vali_link_message msg = VALI_MSG_INIT_HANDLE(ServiceGetNet());
+    struct vali_link_message msg = VALI_MSG_INIT_HANDLE(OSServiceGetNet());
     struct Socket*           socket;
     oserr_t                  oserr = OS_EPROTOCOL;
 
@@ -520,7 +520,7 @@ OSSocketSetOption(
     _In_ const void* data,
     _In_ socklen_t   length)
 {
-    struct vali_link_message msg = VALI_MSG_INIT_HANDLE(ServiceGetNet());
+    struct vali_link_message msg = VALI_MSG_INIT_HANDLE(OSServiceGetNet());
     oserr_t                  oserr = OS_EPROTOCOL;
 
     if (handle == NULL) {
@@ -546,7 +546,7 @@ OSSocketOption(
     _In_    void*       data,
         _InOut_ socklen_t*  length)
 {
-    struct vali_link_message msg = VALI_MSG_INIT_HANDLE(ServiceGetNet());
+    struct vali_link_message msg = VALI_MSG_INIT_HANDLE(OSServiceGetNet());
     oserr_t                  oserr = OS_EPROTOCOL;
     int                      sizeOfData;
     uint32_t                 decodedLength;

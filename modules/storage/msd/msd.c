@@ -55,7 +55,7 @@ __RegisterStorage(
         _In_ uuid_t       deviceId,
         _In_ unsigned int flags)
 {
-    struct vali_link_message msg = VALI_MSG_INIT_HANDLE(ServiceGetFile());
+    struct vali_link_message msg = VALI_MSG_INIT_HANDLE(OSServiceGetFile());
     oserr_t                  result;
     oserr_t                  oserr;
     int                      status;
@@ -92,7 +92,7 @@ __UnregisterStorage(
         _In_ uuid_t  deviceId,
         _In_ uint8_t forced)
 {
-    struct vali_link_message msg = VALI_MSG_INIT_HANDLE(ServiceGetFile());
+    struct vali_link_message msg = VALI_MSG_INIT_HANDLE(OSServiceGetFile());
     int                      status;
 
     status = sys_storage_unregister(
@@ -296,7 +296,7 @@ MSDDeviceRegisterStorage(
     uuid_t deviceId = msdDevice->Device->Base.Id;
 
     // Wait for the disk service to finish loading
-    if (ServiceWaitForFile(1000) != OS_EOK) {
+    if (OSServiceWaitForFile(1000) != OS_EOK) {
         ERROR("MSDDeviceRegisterStorage file service did not start, device %u is not registered", deviceId);
         // TODO: what do
         return;

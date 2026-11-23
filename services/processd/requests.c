@@ -17,7 +17,7 @@
 
 //#define __TRACE
 
-#include <ddk/convert/grants.h>
+#include <os/convert/grants.h>
 #include <ddk/utils.h>
 #include <os/context.h>
 #include <os/handle.h>

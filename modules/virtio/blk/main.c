@@ -443,7 +443,7 @@ __ctt_storage_stat_invocation(
     oserr_t oserr = OS_ENOENT;
 
     if (device != NULL) {
-        to_sys_disk_descriptor_dkk(&device->Descriptor, &descriptor);
+        to_sys_disk_descriptor_ddk(&device->Descriptor, &descriptor);
         oserr = OS_EOK;
     }
     ctt_storage_stat_response(message, oserr, &descriptor);

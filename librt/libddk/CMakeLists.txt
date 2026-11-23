@@ -75,7 +75,6 @@ add_library(libddk
 
     io/deviceio.c
 
-    services/service.c
     services/storage.c
     services/usb.c
 

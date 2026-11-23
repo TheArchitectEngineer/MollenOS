@@ -105,3 +105,15 @@ OSMemorySpaceCreate
 OSMemorySpaceGetForThread
 OSMemorySpaceCreateMapping
 OSSysLogWrite
+OSServiceGetDevice
+OSServiceGetUsb
+OSServiceGetProcess
+OSServiceGetFile
+OSServiceGetNet
+OSServiceGetSysLog
+OSServiceWaitForDevice
+OSServiceWaitForUsb
+OSServiceWaitForProcess
+OSServiceWaitForFile
+OSServiceWaitForNet
+OSServiceWaitForSysLog

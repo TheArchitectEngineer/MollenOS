@@ -135,7 +135,7 @@ __StatFile(
         _In_ uuid_t               handleID,
         _In_ StorageDescriptor_t* stats)
 {
-    struct vali_link_message   msg  = VALI_MSG_INIT_HANDLE(ServiceGetFile());
+    struct vali_link_message   msg  = VALI_MSG_INIT_HANDLE(OSServiceGetFile());
     oserr_t                    osStatus;
     struct sys_file_descriptor fstats;
 
@@ -161,7 +161,7 @@ __StatFile(
     }
 
     // Use the file size and handle to describe the storage.
-    stats->DriverID = ServiceGetFile();
+    stats->DriverID = OSServiceGetFile();
     stats->DeviceID = handleID;
     stats->SectorCount = fstats.size / 512;
     stats->SectorSize  = 512; // TODO this can change in the future

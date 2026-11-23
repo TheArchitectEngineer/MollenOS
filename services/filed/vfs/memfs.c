@@ -19,7 +19,7 @@
 #define __TRACE
 #define __need_minmax
 #include <ddk/utils.h>
-#include <ddk/convert/grants.h>
+#include <os/convert/grants.h>
 #include <ds/hashtable.h>
 #include <os/usched/mutex.h>
 #include <os/handle.h>
