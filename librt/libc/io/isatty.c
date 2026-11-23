@@ -23,8 +23,13 @@
 int isatty(int fd)
 {
     stdio_handle_t* handle = stdio_handle_get(fd);
+
+    // A descriptor that is not open is not a terminal. isatty answers 0 and
+    // sets errno, as marktty does for the same case. Returning EBADF itself
+    // made the answer non-zero, which callers read as "is a terminal".
     if (!handle) {
-        return EBADF;
+        errno = EBADF;
+        return 0;
     }
     return (handle->XTFlags & __IO_TTY) != 0;
 }

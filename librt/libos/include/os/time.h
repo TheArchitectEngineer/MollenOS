@@ -33,8 +33,8 @@ _CODE_BEGIN
  */
 CRTDECL(oserr_t,
 OSSleep(
-        _In_      const OSTimestamp_t* deadline,
-        _Out_Opt_ OSTimestamp_t*       remaining));
+    _In_      const OSTimestamp_t* deadline,
+    _Out_Opt_ OSTimestamp_t*       remaining));
 
 /**
  * @brief Stalls the current thread for the given duration. It will stall for atleast the duration
@@ -45,7 +45,7 @@ OSSleep(
  */
 CRTDECL(oserr_t,
 OSStall(
-        _In_ UInteger64_t* duration));
+    _In_ UInteger64_t* duration));
 
 /**
  * @brief Reads the current wall clock from the kernel wallclock driver. No guarantee is made to
@@ -57,8 +57,8 @@ OSStall(
  */
 CRTDECL(oserr_t,
 OSGetTime(
-        _In_ enum OSTimeSource source,
-        _In_ OSTimestamp_t*    time));
+    _In_ enum OSTimeSource source,
+    _In_ OSTimestamp_t*    time));
 
 /**
  * @brief Reads the current clock tick for the given clock source type. No guarantees are made for their
@@ -71,8 +71,8 @@ OSGetTime(
  */
 CRTDECL(oserr_t,
 OSGetClockTick(
-        _In_ enum OSClockSource source,
-        _In_ UInteger64_t*      tickOut));
+    _In_ enum OSClockSource source,
+    _In_ UInteger64_t*      tickOut));
 
 /**
  * @brief Reads the frequency of the clock source type. Use this to calculate the resolution of a given
@@ -84,8 +84,8 @@ OSGetClockTick(
  */
 CRTDECL(oserr_t,
 OSGetClockFrequency(
-        _In_ enum OSClockSource source,
-        _In_ UInteger64_t*      frequencyOut));
+    _In_ enum OSClockSource source,
+    _In_ UInteger64_t*      frequencyOut));
 
 _CODE_END
 #endif //!__OS_TIME_H__

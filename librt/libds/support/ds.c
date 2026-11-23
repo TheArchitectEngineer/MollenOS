@@ -21,6 +21,7 @@
 #define __TRACE
 
 #include <ds/ds.h>
+#include <stdarg.h>
 
 #if defined(VALI)
 #ifdef __LIBDS_KERNEL_BUILD
@@ -44,7 +45,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdatomic.h>
-#include <stdarg.h>
 extern void Syscall_FutexWait(OSFutexParameters_t*);
 extern void Syscall_FutexWake(OSFutexParameters_t*);
 extern oserr_t OSFutex(OSFutexParameters_t* parameters, OSAsyncContext_t* asyncContext);

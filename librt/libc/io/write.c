@@ -31,6 +31,13 @@ int write(int fd, const void* buffer, unsigned int length)
     oserr_t         oserr;
     TRACE("write(fd=%i, buffer=0x%" PRIxIN ", length=%u)", fd, buffer, length);
 
+    // stdio_handle_get returns NULL for a descriptor that is not open. Report
+    // it the same way read() does.
+    if (!handle) {
+        errno = EBADFD;
+        return -1;
+    }
+
     if (!handle->Ops->write) {
         errno = ENOTSUP;
         return -1;

@@ -114,8 +114,17 @@ int ipsend(int iod, IPCAddress_t* addr, const void* data, unsigned int len, cons
 {
     stdio_handle_t*   handle = stdio_handle_get(iod);
     OSAsyncContext_t* asyncContext = __tls_current()->async_context;
-    if (!handle || stdio_handle_signature(handle) != IPC_SIGNATURE) {
+
+    // A descriptor that is not open is a bad descriptor (EBADF). An open
+    // descriptor of another kind is not an IPC context, which is reported
+    // like a socket call on a descriptor that is not a socket (ENOTSOCK).
+    if (handle == NULL) {
         _set_errno(EBADF);
+        return -1;
+    }
+
+    if (stdio_handle_signature(handle) != IPC_SIGNATURE) {
+        _set_errno(ENOTSOCK);
         return -1;
     }
 
@@ -146,13 +155,19 @@ int iprecv(int iod, void* buffer, unsigned int len, int flags, IPCMessageContext
     OSAsyncContext_t*  asyncContext = __tls_current()->async_context;
     TRACE("iprecv(len=%u, flags=0x%x)");
 
-    if (!handle || !buffer || !len) {
+    if (!buffer || !len) {
         _set_errno(EINVAL);
         goto exit;
     }
-    
-    if (stdio_handle_signature(handle) != IPC_SIGNATURE) {
+
+    // The same descriptor checks as ipsend.
+    if (handle == NULL) {
         _set_errno(EBADF);
+        goto exit;
+    }
+
+    if (stdio_handle_signature(handle) != IPC_SIGNATURE) {
+        _set_errno(ENOTSOCK);
         goto exit;
     }
 

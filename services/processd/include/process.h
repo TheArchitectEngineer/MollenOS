@@ -35,10 +35,33 @@
 // forward declarations
 struct sys_process_inheritance_input;
 
+/**
+ * @brief Lifecycle of a process in phoenix.
+ * RUNNING:     The process runs and has not reported an exit code.
+ * TERMINATING: The process reported its exit code (PmTerminateProcess) and
+ *              joiners have been woken. exit() reports the code before it runs
+ *              the exit handlers, so the process may still be running. The
+ *              record stays in the process table, so name queries and a crash
+ *              report from a failing exit handler still find it.
+ * EXITED:      The primary thread is gone, or the process ran longer than
+ *              PROCESS_EXIT_TIMEOUT_MS after it reported its exit code. The
+ *              record has left the process table and is freed when its last
+ *              reference is released.
+ */
 enum ProcessState {
     ProcessState_RUNNING,
-    ProcessState_TERMINATING
+    ProcessState_TERMINATING,
+    ProcessState_EXITED
 };
+
+/**
+ * How often phoenix checks whether a TERMINATING process is gone, and the
+ * longest time a TERMINATING record stays in the process table. The timeout
+ * bounds the record when the primary thread never ends, or when phoenix
+ * cannot look the thread up.
+ */
+#define PROCESS_EXIT_POLL_MS    100
+#define PROCESS_EXIT_TIMEOUT_MS 30000
 
 struct ProcessOptions {
     uuid_t         Scope;
@@ -66,6 +89,7 @@ typedef struct Process {
     int                        references;
     struct PEImageLoadContext* load_context;
     int                        exit_code;
+    struct timespec            exit_deadline;
     struct ProcessStartupData  startup_data;
 
     mstring_t* name;
@@ -208,7 +232,33 @@ PmReleaseProcess(
     _In_ Process_t* process);
 
 /**
- * @brief Retrieves the process associated by the handle.
+ * @brief Finds a process by its handle and adds a reference under the registry lock.
+ * RUNNING and TERMINATING processes are found. This lookup does not authorize the
+ * caller. Release a successful result with PmReleaseProcess.
+ * @param handle Process handle.
+ * @param processOut Receives the referenced process.
+ * @return OS_EOK, OS_ENOENT or OS_EOVERFLOW.
+ */
+extern oserr_t
+PmReferenceProcessByHandle(
+    _In_  uuid_t      handle,
+    _Out_ Process_t** processOut);
+
+/**
+ * @brief Removes TERMINATING processes whose primary thread is gone, or whose
+ * PROCESS_EXIT_TIMEOUT_MS has passed, from the process table. Each removed
+ * process becomes EXITED and is freed once its last reference is released.
+ * The exit watcher job runs this every PROCESS_EXIT_POLL_MS while any process
+ * is TERMINATING, and stops when this returns 0.
+ * @return The number of processes that are still TERMINATING.
+ */
+extern int
+PmRemoveExitedProcesses(void);
+
+/**
+ * @brief Retrieves the process associated by the handle. RUNNING and
+ * TERMINATING processes are found. No reference is added, so the pointer is
+ * only safe to use while nothing can remove the process.
  *
  * @param[In] handle
  * @return Returns NULL if the handle is invalid.

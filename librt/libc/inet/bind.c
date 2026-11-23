@@ -39,6 +39,13 @@ int bind(int iod, const struct sockaddr* address, socklen_t address_length)
 {
     stdio_handle_t* handle = stdio_handle_get(iod);
 
+    // A descriptor that is not open is a bad descriptor (EBADF). An open
+    // descriptor of another kind is not a socket (ENOTSOCK).
+    if (handle == NULL) {
+        _set_errno(EBADF);
+        return -1;
+    }
+
     if (stdio_handle_signature(handle) != NET_SIGNATURE) {
         _set_errno(ENOTSOCK);
         return -1;

@@ -73,6 +73,13 @@ int accept(int iod, struct sockaddr* address, socklen_t* address_length)
     oserr_t         oserr;
     int             status;
 
+    // A descriptor that is not open is a bad descriptor (EBADF). An open
+    // descriptor of another kind is not a socket (ENOTSOCK).
+    if (source == NULL) {
+        _set_errno(EBADF);
+        return -1;
+    }
+
     if (stdio_handle_signature(source) != NET_SIGNATURE) {
         _set_errno(ENOTSOCK);
         return -1;

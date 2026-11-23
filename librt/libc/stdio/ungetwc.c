@@ -40,6 +40,13 @@ wint_t ungetwc(
 
     flockfile(file);
     handle = stdio_handle_get(file->IOD);
+    if (!handle) {
+        // The stream's descriptor is not open. fgetwc reports the same.
+        funlockfile(file);
+        _set_errno(EBADFD);
+        return WEOF;
+    }
+
     if ((handle->XTFlags & __IO_UTF) || !(handle->XTFlags & __IO_TEXTMODE)) {
         unsigned char *pp = (unsigned char *)&mwc;
         int i;

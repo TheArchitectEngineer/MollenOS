@@ -18,6 +18,7 @@
 #define __TRACE
 
 #include <assert.h>
+#include <errno.h>
 #include <sys_process_service.h>
 #include <limits.h>
 #include <ds/mstring.h>
@@ -31,6 +32,7 @@
 #include <ddk/convert/inheritance.h>
 #include <os/threads.h>
 #include <os/usched/cond.h>
+#include <os/usched/job.h>
 #include <os/shm.h>
 #include <pe.h>
 #include <process.h>
@@ -53,11 +55,37 @@ struct process_history_entry {
     int    exit_code;
 };
 
-static hashtable_t       g_threadmappings;
-static hashtable_t       g_processes;
-static struct usched_mtx g_processesLock;
-static hashtable_t       g_processHistory;
-static struct usched_mtx g_processHistoryLock;
+// Whether the exit watcher job is queued. The job removes TERMINATING
+// processes once they are gone, and ends when none are left.
+enum __ExitWatcherState {
+    ExitWatcherState_IDLE,
+    ExitWatcherState_QUEUED
+};
+
+// The number of processes PmRemoveExitedProcesses removes in one pass. More
+// are removed by the next pass.
+#define __EXIT_BATCH_SIZE 16
+
+/**
+ * One pass of PmRemoveExitedProcesses over the process table.
+ * Now:       Time of the pass, compared with each exit deadline.
+ * Exited:    Processes to remove from the table after the enumeration.
+ * Count:     Number of entries in Exited.
+ * Remaining: TERMINATING processes that stay in the table.
+ */
+struct __ExitPassContext {
+    struct timespec Now;
+    Process_t*      Exited[__EXIT_BATCH_SIZE];
+    int             Count;
+    int             Remaining;
+};
+
+static hashtable_t             g_threadmappings;
+static hashtable_t             g_processes;
+static struct usched_mtx       g_processesLock;
+static hashtable_t             g_processHistory;
+static struct usched_mtx       g_processHistoryLock;
+static enum __ExitWatcherState g_exitWatcher = ExitWatcherState_IDLE; // g_processesLock
 
 static uint64_t mapping_hash(const void* element);
 static int      mapping_cmp(const void* element1, const void* element2);
@@ -120,6 +148,26 @@ __ReferenceProcess(
         *processOut = process;
     }
     usched_mtx_unlock(&process->mutex);
+    return oserr;
+}
+
+oserr_t
+PmReferenceProcessByHandle(
+    _In_  uuid_t      handle,
+    _Out_ Process_t** processOut)
+{
+    struct process_entry* entry;
+    oserr_t               oserr;
+
+    usched_mtx_lock(&g_processesLock);
+    entry = hashtable_get(
+        &g_processes,
+        &(struct process_entry) {
+            .process_id = handle
+        }
+    );
+    oserr = __ReferenceProcess(entry, processOut);
+    usched_mtx_unlock(&g_processesLock);
     return oserr;
 }
 
@@ -751,7 +799,6 @@ PmJoinProcess(
     _In_  unsigned int timeout,
     _Out_ int*         exitCodeOut)
 {
-    struct process_entry*         entry;
     struct process_history_entry* history;
     Process_t*                    target;
     struct timespec               until;
@@ -759,12 +806,11 @@ PmJoinProcess(
     int                           status;
     TRACE("PmJoinProcess(process=%u, timeout=%u)", handle, timeout);
 
-    // Pin the process before dropping the registry lock. Termination removes
-    // its entry under the same lock before it can release the registry owner.
-    usched_mtx_lock(&g_processesLock);
-    entry = hashtable_get(&g_processes, &(struct process_entry) { .process_id = handle });
-    oserr = __ReferenceProcess(entry, &target);
-    usched_mtx_unlock(&g_processesLock);
+    // Pin the process before dropping the registry lock. A TERMINATING process
+    // is still in the table and answers with its exit code at once. A process
+    // that has left the table is answered from the history, which
+    // PmTerminateProcess fills before the record can leave the table.
+    oserr = PmReferenceProcessByHandle(handle, &target);
     if (oserr == OS_ENOENT) {
         usched_mtx_lock(&g_processHistoryLock);
         history = hashtable_get(&g_processHistory, &(struct process_history_entry) {
@@ -802,19 +848,199 @@ PmJoinProcess(
     return oserr;
 }
 
+// Returns whether now is at or after deadline.
+static bool
+__DeadlinePassed(
+    _In_ const struct timespec* now,
+    _In_ const struct timespec* deadline)
+{
+    if (now->tv_sec != deadline->tv_sec) {
+        return now->tv_sec > deadline->tv_sec;
+    }
+    return now->tv_nsec >= deadline->tv_nsec;
+}
+
+// Returns whether the primary thread of the process is gone. The kernel removes
+// a thread ID from lookup once the thread has finished and its last reference
+// is released, and IDs are never reused. OS_ENOENT is the normal answer for a
+// thread that is gone. Any other error means processd cannot tell, and the
+// process counts as gone so its record cannot stay for ever.
+static bool
+__PrimaryThreadGone(
+    _In_ Process_t* process)
+{
+    uuid_t  memorySpace;
+    oserr_t oserr;
+
+    oserr = Syscall_GetMemorySpaceForThread(process->primary_thread_id, &memorySpace);
+    if (oserr == OS_EOK) {
+        return false;
+    }
+
+    if (oserr != OS_ENOENT) {
+        WARNING("PmRemoveExitedProcesses failed to look up thread %u of process %u: %u",
+                process->primary_thread_id, process->handle.ID, oserr);
+    }
+    return true;
+}
+
+// hashtable_enumerate callback of PmRemoveExitedProcesses. Entries are only
+// collected here, because removing them would change the table while it is
+// being enumerated.
+static void
+__CollectExitedProcess(
+    _In_ int         index,
+    _In_ const void* element,
+    _In_ void*       userContext)
+{
+    const struct process_entry* entry = element;
+    struct __ExitPassContext*         sweep = userContext;
+    Process_t*                  process = entry->process;
+    enum ProcessState           state;
+    bool                        expired;
+    _CRT_UNUSED(index);
+
+    usched_mtx_lock(&process->mutex);
+    state = process->state;
+    expired = __DeadlinePassed(&sweep->Now, &process->exit_deadline);
+    usched_mtx_unlock(&process->mutex);
+    if (state != ProcessState_TERMINATING) {
+        return;
+    }
+
+    if (sweep->Count == __EXIT_BATCH_SIZE) {
+        sweep->Remaining++;
+        return;
+    }
+
+    if (__PrimaryThreadGone(process)) {
+        sweep->Exited[sweep->Count++] = process;
+    } else if (expired) {
+        WARNING("PmRemoveExitedProcesses process %u still runs %u ms after it reported its exit, removing it",
+                process->handle.ID, PROCESS_EXIT_TIMEOUT_MS);
+        sweep->Exited[sweep->Count++] = process;
+    } else {
+        sweep->Remaining++;
+    }
+}
+
+int
+PmRemoveExitedProcesses(void)
+{
+    struct __ExitPassContext sweep = { 0 };
+    int                i;
+
+    timespec_get(&sweep.Now, TIME_UTC);
+
+    // Collect and remove under the registry lock, so a lookup either finds a
+    // TERMINATING process or none. The watcher state is updated under the same
+    // lock, so a PmTerminateProcess that runs at the same time either sees the
+    // watcher queued or queues a new one.
+    usched_mtx_lock(&g_processesLock);
+    hashtable_enumerate(&g_processes, __CollectExitedProcess, &sweep);
+    for (i = 0; i < sweep.Count; i++) {
+        hashtable_remove(&g_processes, &(struct process_entry) {
+            .process_id = sweep.Exited[i]->handle.ID
+        });
+    }
+    if (sweep.Remaining == 0) {
+        g_exitWatcher = ExitWatcherState_IDLE;
+    }
+    usched_mtx_unlock(&g_processesLock);
+
+    // Release the reference of the process table outside the registry lock,
+    // because the last release takes it again in DestroyProcess.
+    for (i = 0; i < sweep.Count; i++) {
+        TRACE("PmRemoveExitedProcesses process %u is gone", sweep.Exited[i]->handle.ID);
+        usched_mtx_lock(&sweep.Exited[i]->mutex);
+        sweep.Exited[i]->state = ProcessState_EXITED;
+        usched_mtx_unlock(&sweep.Exited[i]->mutex);
+        PmReleaseProcess(sweep.Exited[i]);
+    }
+    return sweep.Remaining;
+}
+
+// The exit watcher job. It checks the TERMINATING processes every
+// PROCESS_EXIT_POLL_MS and ends when none are left.
+static void
+__ExitWatcher(
+    _In_ void* argument,
+    _In_ void* cancellationToken)
+{
+    struct timespec until;
+    _CRT_UNUSED(argument);
+    _CRT_UNUSED(cancellationToken);
+
+    do {
+        __get_timestamp_from_now(PROCESS_EXIT_POLL_MS, &until);
+        if (usched_job_sleep(&until) != 0) {
+            // Without the sleep this loop would never yield. Stop, and let
+            // the next PmTerminateProcess queue a new watcher.
+            ERROR("__ExitWatcher failed to sleep: %i", errno);
+            usched_mtx_lock(&g_processesLock);
+            g_exitWatcher = ExitWatcherState_IDLE;
+            usched_mtx_unlock(&g_processesLock);
+            return;
+        }
+    } while (PmRemoveExitedProcesses() > 0);
+}
+
+static void
+__StartExitWatcher(void)
+{
+    uuid_t job;
+
+    usched_mtx_lock(&g_processesLock);
+    if (g_exitWatcher == ExitWatcherState_QUEUED) {
+        usched_mtx_unlock(&g_processesLock);
+        return;
+    }
+
+    job = usched_job_queue(__ExitWatcher, NULL);
+    if (job == UUID_INVALID) {
+        usched_mtx_unlock(&g_processesLock);
+        // The TERMINATING processes stay until the next PmTerminateProcess
+        // starts a watcher.
+        ERROR("PmTerminateProcess failed to start the exit watcher");
+        return;
+    }
+    g_exitWatcher = ExitWatcherState_QUEUED;
+    usched_mtx_unlock(&g_processesLock);
+}
+
 oserr_t
 PmTerminateProcess(
     _In_ uuid_t processHandle,
     _In_ int    exitCode)
 {
-    struct process_entry* entry;
-    Process_t*            process;
+    Process_t* process;
+    oserr_t    oserr;
 
     TRACE("PmTerminateProcess process %u exitted with code: %i",
           processHandle, exitCode);
 
-    // Add a new entry in our history archive before removing to avoid
-    // any data races when other requests look for this.
+    // The process stays in the table as TERMINATING. exit() reports the exit
+    // code before it runs the exit handlers, so the process is still running,
+    // and a crash in one of the handlers must still find it. The exit watcher
+    // removes it once the primary thread is gone.
+    oserr = PmReferenceProcessByHandle(processHandle, &process);
+    if (oserr != OS_EOK) {
+        return oserr;
+    }
+
+    usched_mtx_lock(&process->mutex);
+    if (process->state != ProcessState_RUNNING) {
+        // A second report, for example from _Exit after a crash in an exit
+        // handler. Joiners already have the first exit code, and it stays.
+        TRACE("PmTerminateProcess process %u already reported exit code %i",
+              processHandle, process->exit_code);
+        usched_mtx_unlock(&process->mutex);
+        PmReleaseProcess(process);
+        return OS_EOK;
+    }
+
+    // Add the history entry before the record can leave the table, so a join
+    // always finds either the record or the entry.
     usched_mtx_lock(&g_processHistoryLock);
     hashtable_set(&g_processHistory, &(struct process_history_entry) {
             .process_id = processHandle,
@@ -822,37 +1048,16 @@ PmTerminateProcess(
     });
     usched_mtx_unlock(&g_processHistoryLock);
 
-    // Do manual lookup here as we might be altering the list. We do not want some race
-    // where someone gets a hold of the process pointer while we are in the process of
-    // removing it.
-    usched_mtx_lock(&g_processesLock);
-    entry = hashtable_remove(
-            &g_processes,
-            &(struct process_entry) {
-                .process_id = processHandle
-            }
-    );
-    if (entry == NULL) {
-        usched_mtx_unlock(&g_processesLock);
-        return OS_ENOENT;
-    }
-
-    // get a pointer to the actual process before we release the lock
-    process = entry->process;
-    usched_mtx_unlock(&g_processesLock);
-
-    // At this point it's possible for other requests to hold a pointer to
-    // the process (waiters), which means we must wait for all these requests to
-    // finish.
-    usched_mtx_lock(&process->mutex);
-
-    // update state of process first
     process->state     = ProcessState_TERMINATING;
     process->exit_code = exitCode;
+    __get_timestamp_from_now(PROCESS_EXIT_TIMEOUT_MS, &process->exit_deadline);
 
+    // Joiners wake up now, with the exit code above.
     usched_cnd_notify_all(&process->condition);
     usched_mtx_unlock(&process->mutex);
     PmReleaseProcess(process);
+
+    __StartExitWatcher();
     return OS_EOK;
 }
 
@@ -874,7 +1079,8 @@ PmSignalProcess(
         goto exit;
     }
 
-    // try to send a kill signal to primary thread
+    // try to send a kill signal to primary thread. A TERMINATING process has
+    // already reported its exit code and is ending, so it gets no signal.
     usched_mtx_lock(&victim->mutex);
     if (victim->state == ProcessState_RUNNING) {
         oserr = Syscall_ThreadSignal(victim->primary_thread_id, signal);

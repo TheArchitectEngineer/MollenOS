@@ -24,6 +24,12 @@
 
 _CODE_BEGIN
 CRTDECL(int, ipcontext(unsigned int len, IPCAddress_t* addr));
+/**
+ * @brief Sends one IPC message from an IPC stream to the given address.
+ * @return 0 if the message was sent. Otherwise -1 with errno set: EBADF when
+ *         iod is not open, ENOTSOCK when iod is open but is not an IPC context,
+ *         or the errno of the failed send.
+ */
 CRTDECL(int, ipsend(int iod, IPCAddress_t* addr, const void* data, unsigned int len, const struct timespec* deadline));
 
 /**
@@ -39,7 +45,9 @@ CRTDECL(int, ipsend(int iod, IPCAddress_t* addr, const void* data, unsigned int 
  *                        This handle can then be used in conjunction with IPC_ADDRESS_HANDLE_INIT.
  * @return If successful, returns the number of bytes received in buffer
  *         If an error occurs, this function returns -1, and sets a status code
- *         in errno.
+ *         in errno: EINVAL for a NULL buffer or a zero len, EBADF when iod is
+ *         not open, ENOTSOCK when iod is open but is not an IPC context, and
+ *         ENODATA when no message was read.
  */
 CRTDECL(int, iprecv(int iod, void* buffer, unsigned int len, int flags, IPCMessageContext_t* msgContext));
 

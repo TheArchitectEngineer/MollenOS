@@ -10,12 +10,16 @@
 #ifndef __OS_INTERNAL_GRACHT_H__
 #define __OS_INTERNAL_GRACHT_H__
 
+#include <ddk/utils.h>
+#include <errno.h>
 #include <gracht/client.h>
 #include <os/osdefs.h>
 
 /**
  * @brief Waits for a successfully sent request and requires a complete response.
  * Failed waits discard the local request state; remote work may still continue.
+ * A request that cannot be discarded stays in the client, and the failure is
+ * logged with the request id and errno.
  * @param client Client that sent the request.
  * @param context Sent request context.
  * @param flags Gracht await flags.
@@ -29,7 +33,10 @@ __GrachtAwaitCompleted(
 {
     if (gracht_client_await(client, context, flags) != 0 ||
         gracht_client_get_status(client, context) != GRACHT_MESSAGE_COMPLETED) {
-        gracht_client_abandon(client, context);
+        if (gracht_client_abandon(client, context) != 0) {
+            ERROR("__GrachtAwaitCompleted: failed to abandon request %u: errno %i",
+                  context->message_id, errno);
+        }
         return OS_EUNKNOWN;
     }
     return OS_EOK;

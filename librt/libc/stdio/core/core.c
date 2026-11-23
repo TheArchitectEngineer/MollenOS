@@ -202,63 +202,177 @@ StdioConfigureStandardHandles(void)
     stdio_handle_set_buffered(stderrHandle, NULL, _IOWR, _IONBF);
 }
 
-struct __iod_close_context {
-    unsigned int excludeFlags;
-    int          filesClosed;
+// The descriptors are closed at exit in two steps. First the handles to close
+// are collected while the table is enumerated, then they are closed one by
+// one. A close removes its entry from g_stdioObjects, and a removal can shrink
+// the table and free its storage, so no close may run from inside
+// hashtable_enumerate.
+
+/**
+ * @brief Collects the handles that __close_io_descriptors closes. The handles
+ * array has room for capacity entries, and count says how many are stored.
+ */
+struct __iod_collect_context {
+    unsigned int     excludeFlags;
+    stdio_handle_t** handles;
+    int              capacity;
+    int              count;
 };
 
+/**
+ * @brief Finds the open descriptor with the lowest number above after that is
+ * not excluded. handle stays NULL when there is none.
+ */
+struct __iod_find_context {
+    unsigned int    excludeFlags;
+    int             after;
+    stdio_handle_t* handle;
+};
+
+// A descriptor is closed unless it carries one of the excluded flags.
+static int
+__should_close(
+        _In_ stdio_handle_t* handle,
+        _In_ unsigned int    excludeFlags)
+{
+    if (handle == NULL) {
+        return 0;
+    }
+    return !(excludeFlags && (handle->XTFlags & excludeFlags));
+}
+
+// A buffered stream is closed through fclose, which frees the stream and then
+// closes the descriptor. Other descriptors are closed directly. A successful
+// close frees the handle, so the descriptor number is read first. A failed
+// close leaves the descriptor open and is logged.
 static void
-__close_entry(
+__close_handle(
+        _In_ stdio_handle_t* handle)
+{
+    int iod = handle->IOD;
+    int status;
+
+    if (handle->Stream) {
+        status = fclose(handle->Stream);
+    } else {
+        status = close(iod);
+    }
+
+    if (status != 0) {
+        WARNING("__close_io_descriptors: closing descriptor %i failed: errno %i", iod, errno);
+    }
+}
+
+static void
+__collect_entry(
         _In_ int         index,
         _In_ const void* element,
         _In_ void*       userContext)
 {
-    struct stdio_object_entry*  entry = (struct stdio_object_entry*)element;
-    stdio_handle_t*             handle = entry->handle;
-    struct __iod_close_context* context = userContext;
+    const struct stdio_object_entry* entry = element;
+    struct __iod_collect_context*    context = userContext;
     _CRT_UNUSED(index);
 
-    if (handle == NULL) {
-        // already cleaned up
+    if (!__should_close(entry->handle, context->excludeFlags)) {
         return;
     }
 
-    if (context->excludeFlags && (handle->XTFlags & context->excludeFlags)) {
-        return;
-    }
-
-    // Is it a buffered stream or raw?
-    if (handle->Stream) {
-        fclose(handle->Stream);
-    } else {
-        close(handle->IOD);
-    }
-
-    // Cleanup handle, and mark the handle NULL to not cleanup twice.
-    // We do a *VERY* crude cleanup here as we are called on shutdown
-    // which means we don't really care about proper cleanup
-    entry->handle = NULL;
-
-    context->filesClosed++;
+    // The table cannot change during the enumeration, so it never holds more
+    // entries than the count the list was sized from.
+    assert(context->count < context->capacity);
+    context->handles[context->count++] = entry->handle;
 }
 
+static void
+__find_entry(
+        _In_ int         index,
+        _In_ const void* element,
+        _In_ void*       userContext)
+{
+    const struct stdio_object_entry* entry = element;
+    struct __iod_find_context*       context = userContext;
+    _CRT_UNUSED(index);
+
+    if (!__should_close(entry->handle, context->excludeFlags) || entry->id <= context->after) {
+        return;
+    }
+
+    if (context->handle == NULL || entry->id < context->handle->IOD) {
+        context->handle = entry->handle;
+    }
+}
+
+// Closes the descriptors one at a time without a list. It is used when the
+// list cannot be allocated. Each round looks up the lowest descriptor number
+// above the one closed last, so a descriptor whose close fails and stays in
+// the table is not tried again, and the loop ends after at most one round per
+// descriptor.
+static int
+__close_io_descriptors_without_list(
+        _In_ unsigned int excludeFlags)
+{
+    struct __iod_find_context context = {
+            .excludeFlags = excludeFlags,
+            .after        = -1
+    };
+    int filesClosed = 0;
+
+    while (1) {
+        context.handle = NULL;
+        LOCK_FILES();
+        hashtable_enumerate(&g_stdioObjects, __find_entry, &context);
+        UNLOCK_FILES();
+        if (context.handle == NULL) {
+            break;
+        }
+
+        context.after = context.handle->IOD;
+        __close_handle(context.handle);
+        filesClosed++;
+    }
+    return filesClosed;
+}
+
+// Closes every descriptor that carries none of excludeFlags, and returns how
+// many were closed. __CleanupSTDIO calls this twice at exit: first with
+// __IO_PRIORITY excluded, then with nothing excluded to close the rest.
 static int
 __close_io_descriptors(
         _In_ unsigned int excludeFlags)
 {
-    struct __iod_close_context context = {
-            .excludeFlags = excludeFlags,
-            .filesClosed  = 0
+    struct __iod_collect_context context = {
+        .excludeFlags = excludeFlags,
+        .handles      = NULL,
+        .capacity     = 0,
+        .count        = 0
     };
-    
+
     LOCK_FILES();
-    hashtable_enumerate(
-            &g_stdioObjects,
-            __close_entry,
-            &context
-    );
+    if (g_stdioObjects.element_count == 0) {
+        UNLOCK_FILES();
+        return 0;
+    }
+
+    context.capacity = (int)g_stdioObjects.element_count;
+    context.handles = malloc(sizeof(stdio_handle_t*) * g_stdioObjects.element_count);
+    if (context.handles == NULL) {
+        UNLOCK_FILES();
+        ERROR("__close_io_descriptors: no memory for the list of %i descriptors, closing them one by one",
+              context.capacity);
+        return __close_io_descriptors_without_list(excludeFlags);
+    }
+
+    hashtable_enumerate(&g_stdioObjects, __collect_entry, &context);
     UNLOCK_FILES();
-    return context.filesClosed;
+
+    // The file lock is not held across close() and fclose(), and neither of
+    // them takes it. Each handle is still open here, because closing one
+    // descriptor never closes another.
+    for (int i = 0; i < context.count; i++) {
+        __close_handle(context.handles[i]);
+    }
+    free(context.handles);
+    return context.count;
 }
 
 static unsigned int

@@ -309,11 +309,15 @@ void sys_process_report_crash_invocation(struct gracht_message* message, const u
     oserr_t    oserr;
 
     TRACE("sys_process_report_crash_invocation(crashContext_count=%u)", crashContext_count);
-    
-    process = PmGetProcessByHandle(processId);
-    if (!process) {
-        // what the *?
-        sys_process_report_crash_response(message, OS_ENOENT);
+
+    // A process that has already reported its exit code is TERMINATING while
+    // it runs its exit handlers, and is still found here. The reference keeps
+    // the record and its load context while the report is written.
+    oserr = PmReferenceProcessByHandle(processId, &process);
+    if (oserr != OS_EOK) {
+        ERROR("sys_process_report_crash_invocation no process %u for the crash report: %u",
+              processId, oserr);
+        sys_process_report_crash_response(message, oserr);
         return;
     }
 
@@ -323,5 +327,10 @@ void sys_process_report_crash_invocation(struct gracht_message* message, const u
             (const Context_t*)crashContext,
             reason
     );
+    PmReleaseProcess(process);
+    if (oserr != OS_EOK) {
+        ERROR("sys_process_report_crash_invocation failed to write the crash report of process %u: %u",
+              processId, oserr);
+    }
     sys_process_report_crash_response(message, oserr);
 }

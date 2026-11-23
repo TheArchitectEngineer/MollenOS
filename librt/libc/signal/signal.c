@@ -23,6 +23,7 @@
 #include <errno.h>
 #include <gracht/link/vali.h>
 #include <fenv.h>
+#include <internal/_gracht.h>
 #include <internal/_syscalls.h>
 #include <internal/_tls.h>
 #include <internal/_utils.h>
@@ -94,6 +95,51 @@ static sig_element signal_list[] = {
     { SIGEXITQ, "Quick exit requested by application", quick_exit }
 };
 
+// Sends the crash report to processd, which prints the module and stack trace.
+// Each step is checked, and a report that could not be delivered or that
+// processd refused is logged here, because the process ends right after this
+// and nothing else would show that the report is missing.
+static void
+__ReportCrash(
+    _In_ Context_t*   context,
+    _In_ sig_element* signal)
+{
+    struct vali_link_message msg = VALI_MSG_INIT_HANDLE(GetProcessService());
+    oserr_t                  oserr;
+    oserr_t                  reportStatus;
+    int                      status;
+
+    status = sys_process_report_crash(
+        GetGrachtClient(), &msg.base,
+        ThreadsCurrentId(),
+        __crt_process_id(),
+        (const uint8_t*)context,
+        sizeof(Context_t),
+        signal->signal
+    );
+    if (status) {
+        ERROR("__CrashHandler: failed to send the crash report: errno %i", errno);
+        return;
+    }
+
+    // __GrachtAwaitCompleted discards the request when no answer arrived.
+    oserr = __GrachtAwaitCompleted(GetGrachtClient(), &msg.base, 0);
+    if (oserr != OS_EOK) {
+        ERROR("__CrashHandler: no answer to the crash report: errno %i", errno);
+        return;
+    }
+
+    status = sys_process_report_crash_result(GetGrachtClient(), &msg.base, &reportStatus);
+    if (status) {
+        ERROR("__CrashHandler: failed to read the answer to the crash report: errno %i", errno);
+        return;
+    }
+
+    if (reportStatus != OS_EOK) {
+        ERROR("__CrashHandler: processd refused the crash report: %u", reportStatus);
+    }
+}
+
 static void
 __CrashHandler(
     _In_ Context_t*   context,
@@ -105,19 +151,7 @@ __CrashHandler(
 
     // Not supported by phoenix
     if (!__crt_is_phoenix()) {
-        oserr_t               osStatus;
-        struct vali_link_message msg = VALI_MSG_INIT_HANDLE(GetProcessService());
-
-        sys_process_report_crash(
-                GetGrachtClient(), &msg.base,
-                ThreadsCurrentId(),
-                __crt_process_id(),
-                (const uint8_t*)context,
-                sizeof(Context_t),
-                signal->signal
-        );
-        gracht_client_await(GetGrachtClient(), &msg.base, 0);
-        sys_process_report_crash_result(GetGrachtClient(), &msg.base, &osStatus);
+        __ReportCrash(context, signal);
     } else {
         ERROR("Faulting address is 0x%" PRIxIN, CONTEXT_IP(context));
     }
