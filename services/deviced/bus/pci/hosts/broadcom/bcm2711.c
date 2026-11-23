@@ -252,7 +252,7 @@ __Bcm2711Prepare(
 
     // A failed read returns all bits set, including the CPU-side controller bit.
     // Reject that value before checking the controller type.
-    if (ReadDeviceIo(&bus->IoSpace, BCM_PCIE_LINK_STATUS, sizeof(uint32_t)) ==
+    if (DeviceIoRead(&bus->IoSpace, BCM_PCIE_LINK_STATUS, sizeof(uint32_t)) ==
             BCM_PCIE_READ_FAILED) {
         ERROR("__Bcm2711Prepare could not read controller link status");
         return OS_ENOTSUPPORTED;
@@ -260,7 +260,7 @@ __Bcm2711Prepare(
 
     // This driver requires the CPU side of the connection (a root port).
     // Reject device-side mode before programming the host's address mappings.
-    if (!(ReadDeviceIo(&bus->IoSpace, BCM_PCIE_LINK_STATUS, sizeof(uint32_t)) &
+    if (!(DeviceIoRead(&bus->IoSpace, BCM_PCIE_LINK_STATUS, sizeof(uint32_t)) &
             BCM_PCIE_STATUS_ROOT_PORT)) {
         WARNING("__Bcm2711Prepare controller is not a root port");
         return OS_ENOTSUPPORTED;
@@ -293,27 +293,27 @@ __Bcm2711Inbound(
 
     // This variant uses BAR2 for RAM. Clear BAR1's size to remove any extra
     // mapping left by firmware.
-    status = WriteDeviceIo(
+    status = DeviceIoWrite(
         &bus->IoSpace,
         BCM_PCIE_INBOUND_BAR1,
         BCM_PCIE_INBOUND_DISABLED,
         sizeof(uint32_t)
     );
     if (status != OS_EOK) {
-        ERROR("__Bcm2711Inbound WriteDeviceIo register 0x%x failed: %u",
+        ERROR("__Bcm2711Inbound DeviceIoWrite register 0x%x failed: %u",
             (unsigned)(BCM_PCIE_INBOUND_BAR1), status);
         return status;
     }
 
     // Disable BAR3 so it cannot provide another route to RAM.
-    status = WriteDeviceIo(
+    status = DeviceIoWrite(
         &bus->IoSpace,
         BCM_PCIE_INBOUND_BAR3,
         BCM_PCIE_INBOUND_DISABLED,
         sizeof(uint32_t)
     );
     if (status != OS_EOK) {
-        ERROR("__Bcm2711Inbound WriteDeviceIo register 0x%x failed: %u",
+        ERROR("__Bcm2711Inbound DeviceIoWrite register 0x%x failed: %u",
             (unsigned)(BCM_PCIE_INBOUND_BAR3), status);
         return status;
     }
@@ -323,42 +323,42 @@ __Bcm2711Inbound(
     // this receiver and initializes it on the first message allocation, after
     // the host's reset and inbound-window programming have completed. Do not
     // reset or reprogram the host after devices have acquired messages.
-    status = WriteDeviceIo(
+    status = DeviceIoWrite(
         &bus->IoSpace,
         BCM_PCIE_MSI_BAR,
         BCM_PCIE_MSI_DISABLED,
         sizeof(uint32_t)
     );
     if (status != OS_EOK) {
-        ERROR("__Bcm2711Inbound WriteDeviceIo register 0x%x failed: %u",
+        ERROR("__Bcm2711Inbound DeviceIoWrite register 0x%x failed: %u",
             (unsigned)(BCM_PCIE_MSI_BAR), status);
         return status;
     }
 
     // Earlier checks confirmed that the starting address leaves the size bits
     // zero. Combine the lower 32 address bits with the size code to enable access.
-    status = WriteDeviceIo(
+    status = DeviceIoWrite(
         &bus->IoSpace,
         BCM_PCIE_INBOUND_BAR2,
         (uint32_t)window->BusBase | sizeCode,
         sizeof(uint32_t)
     );
     if (status != OS_EOK) {
-        ERROR("__Bcm2711Inbound WriteDeviceIo register 0x%x failed: %u",
+        ERROR("__Bcm2711Inbound DeviceIoWrite register 0x%x failed: %u",
             (unsigned)(BCM_PCIE_INBOUND_BAR2), status);
         return status;
     }
 
     // Preserve the upper PCI address half: device-visible RAM may start above
     // 4 GiB even though its CPU physical destination is fixed at zero.
-    status = WriteDeviceIo(
+    status = DeviceIoWrite(
         &bus->IoSpace,
         BCM_PCIE_INBOUND_BAR2 + BCM_PCIE_REGISTER_HIGH_OFFSET,
         window->BusBase >> BCM_PCIE_ADDRESS_HIGH_SHIFT,
         sizeof(uint32_t)
     );
     if (status != OS_EOK) {
-        ERROR("__Bcm2711Inbound WriteDeviceIo register 0x%x failed: %u",
+        ERROR("__Bcm2711Inbound DeviceIoWrite register 0x%x failed: %u",
             (unsigned)(BCM_PCIE_INBOUND_BAR2 + BCM_PCIE_REGISTER_HIGH_OFFSET), status);
         return status;
     }
@@ -455,21 +455,21 @@ __Bcm2711Start(
 
     // Read the 16-bit link-control word to preserve unrelated controls. Avoid
     // a wider access here, which would also touch the adjacent status word.
-    linkControl = (uint16_t)ReadDeviceIo(
+    linkControl = (uint16_t)DeviceIoRead(
         &bus->IoSpace,
         BCM_PCIE_LINK_CONTROL2,
         sizeof(uint16_t)
     );
 
     // Request the same speed that the capability above advertises.
-    status = WriteDeviceIo(
+    status = DeviceIoWrite(
         &bus->IoSpace,
         BCM_PCIE_LINK_CONTROL2,
         (linkControl & ~BCM_PCIE_LINK_CONTROL2_SPEED_MASK) | linkSpeed,
         sizeof(uint16_t)
     );
     if (status != OS_EOK) {
-        ERROR("__Bcm2711Start WriteDeviceIo register 0x%x failed: %u",
+        ERROR("__Bcm2711Start DeviceIoWrite register 0x%x failed: %u",
             (unsigned)(BCM_PCIE_LINK_CONTROL2), status);
         return status;
     }

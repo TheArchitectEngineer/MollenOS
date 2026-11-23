@@ -44,7 +44,7 @@ static int __zstd_decode(
 void __ValiFSConfigureReader(struct VaFsReaderConfiguration* configuration,
                            struct VaFsCodec codecs[2])
 {
-    DdkInitrdConfigureVafsReader(configuration);
+    InitrdConfigureVafsReader(configuration);
     codecs[0] = configuration->SupportedCodecs[0];
     codecs[1] = (struct VaFsCodec) { .ID = "zstd", .Decode = __zstd_decode };
     vafs_reader_config_set_codecs(configuration, codecs, 2);

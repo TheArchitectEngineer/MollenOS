@@ -21,7 +21,7 @@
 #include <os/osdefs.h>
 #include <ddk/dma.h>
 #include <ddk/io.h>
-#include <ddk/resources.h>
+#include <ddk/devices/resources.h>
 #include <os/types/handle.h>
 #include <os/types/shm.h>
 

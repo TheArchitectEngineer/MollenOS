@@ -42,16 +42,16 @@ Rp1SourceSetTableMask(
 
     // Change only the mask bit. Keep the MSI-X address, data, and other
     // settings unchanged.
-    value = (uint32_t)ReadDeviceIo(&runtime->Pci.Table, offset, 4);
+    value = (uint32_t)DeviceIoRead(&runtime->Pci.Table, offset, 4);
     value = mask ? value | 1U : value & ~1U;
-    status = WriteDeviceIo(&runtime->Pci.Table, offset, value, 4);
+    status = DeviceIoWrite(&runtime->Pci.Table, offset, value, 4);
     if (status != OS_EOK) {
-        ERROR("Rp1SourceSetTableMask: WriteDeviceIo source %u, offset 0x%zx, mask %d failed: %u",
+        ERROR("Rp1SourceSetTableMask: DeviceIoWrite source %u, offset 0x%zx, mask %d failed: %u",
               source, offset, mask, status);
         return status;
     }
 
-    actual = (uint32_t)ReadDeviceIo(&runtime->Pci.Table, offset, 4);
+    actual = (uint32_t)DeviceIoRead(&runtime->Pci.Table, offset, 4);
     if (actual != value) {
         ERROR("Rp1SourceSetTableMask: source %u, offset 0x%zx readback 0x%x, expected 0x%x",
               source, offset, actual, value);
@@ -143,14 +143,14 @@ __Rp1ProgramSource(
     for (uint32_t i = 0; i < 3; i++) {
         offset = number * RP1_VECTOR_BYTES + i * sizeof(uint32_t);
 
-        status = WriteDeviceIo(&runtime->Pci.Table, offset, words[i], 4);
+        status = DeviceIoWrite(&runtime->Pci.Table, offset, words[i], 4);
         if (status != OS_EOK) {
             ERROR("__Rp1ProgramSource: device %u source %u word %u write failed: %u",
                   child->DeviceId, number, i, status);
             return status;
         }
 
-        actual = (uint32_t)ReadDeviceIo(&runtime->Pci.Table, offset, 4);
+        actual = (uint32_t)DeviceIoRead(&runtime->Pci.Table, offset, 4);
         if (actual != words[i]) {
             ERROR("__Rp1ProgramSource: source %u word %u readback 0x%x, expected 0x%x",
                   number, i, actual, words[i]);

@@ -49,7 +49,7 @@ __CreateBarResource(
                 index, (unsigned long long)physical, (unsigned long long)length);
             return;
         }
-        status = CreateDevicePortIo(&io, (uint16_t)physical, (size_t)length);
+        status = DeviceIoCreatePort(&io, (uint16_t)physical, (size_t)length);
         if (status != OS_EOK) {
             ERROR("__CreateBarResource: PCI %u:%u:%u.%u BAR%u failed to register port range 0x%llx+0x%llx (%u)",
                 bus->Identification.Segment, device->Bus, device->Slot, device->Function,

@@ -170,7 +170,7 @@ AhciManagerRegisterDevice(
     }
 
     osStatus = AhciTransactionControlCreate(ahciDevice, AtaPIOIdentifyDevice,
-                                            sizeof(ATAIdentify_t), __STORAGE_OPERATION_READ);
+                                            sizeof(ATAIdentify_t), STORAGE_OPERATION_READ);
     if (osStatus != OS_EOK) {
         ERROR("AhciManagerRegisterDevice osStatus=%u", osStatus);
         free(ahciDevice);

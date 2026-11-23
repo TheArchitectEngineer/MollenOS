@@ -86,7 +86,7 @@ AhciControllerCreate(
 
     // Get I/O Base, and for AHCI there might be between 1-5
     // IO-spaces filled, so we always, ALWAYS go for the last one
-    for (i = __DEVICEMANAGER_MAX_IOSPACES - 1; i >= 0; i--) {
+    for (i = DEVICEMANAGER_MAX_IOSPACES - 1; i >= 0; i--) {
         if (controller->Device->IoSpaces[i].Type == DeviceIoMemoryBased) {
             ioBase = &controller->Device->IoSpaces[i];
             break;
@@ -102,7 +102,7 @@ AhciControllerCreate(
           ioBase->Type, ioBase->Access.Memory.PhysicalBase, ioBase->Access.Memory.Length);
 
     // Acquire the io-space
-    osStatus = AcquireDeviceIo(ioBase);
+    osStatus = DeviceIoAcquire(ioBase);
     if (osStatus != OS_EOK) {
         ERROR("Failed to create and acquire the io-space for ahci-controller");
         return OS_EUNKNOWN;
@@ -162,7 +162,7 @@ AhciControllerCreate(
             controller->Device->Base.Id,
             OSIOCTLREQUEST_BUS_CONTROL,
             &(struct OSIOCtlBusControl) {
-                    .Flags = (__DEVICEMANAGER_IOCTL_MMIO_ENABLE)
+                    .Flags = (DEVICEMANAGER_IOCTL_MMIO_ENABLE)
             }, sizeof(struct OSIOCtlBusControl)
     );
     if (osStatus != OS_EOK) {
@@ -214,7 +214,7 @@ AhciControllerDestroy(
     }
 
     if (controller->IoBase != NULL) {
-        status = ReleaseDeviceIo(controller->IoBase);
+        status = DeviceIoRelease(controller->IoBase);
         if (status != OS_EOK) {
             goto retry;
         }
@@ -442,8 +442,8 @@ AhciSetup(
         controller->Device->Base.Id,
         OSIOCTLREQUEST_BUS_CONTROL,
         &(struct OSIOCtlBusControl) {
-            .Flags = __DEVICEMANAGER_IOCTL_ENABLE | __DEVICEMANAGER_IOCTL_MMIO_ENABLE |
-                     __DEVICEMANAGER_IOCTL_BUSMASTER_ENABLE
+            .Flags = DEVICEMANAGER_IOCTL_ENABLE | DEVICEMANAGER_IOCTL_MMIO_ENABLE |
+                     DEVICEMANAGER_IOCTL_BUSMASTER_ENABLE
         },
         sizeof(struct OSIOCtlBusControl)
     );

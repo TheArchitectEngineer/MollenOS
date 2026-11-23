@@ -82,13 +82,13 @@ __InstallPS2Controller(void)
 
     // The PS/2 controller uses two one-byte I/O ports:
     // data at 0x60 and status/command at 0x64.
-    oserr = CreateDevicePortIo(&device->IoSpaces[0], 0x60, 1);
+    oserr = DeviceIoCreatePort(&device->IoSpaces[0], 0x60, 1);
     if (oserr != OS_EOK) {
         ERROR("__InstallPS2Controller: failed to initialize data port 0x60: %u", oserr);
         return OS_EUNKNOWN;
     }
 
-    oserr = CreateDevicePortIo(&device->IoSpaces[1], 0x64, 1);
+    oserr = DeviceIoCreatePort(&device->IoSpaces[1], 0x64, 1);
     if (oserr != OS_EOK) {
         ERROR("__InstallPS2Controller: failed to initialize command/status port 0x64: %u", oserr);
         return OS_EUNKNOWN;

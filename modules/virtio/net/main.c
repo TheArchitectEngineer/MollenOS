@@ -294,7 +294,7 @@ ctt_driver_register_device_invocation(
     // Validate the variable wire array before the shared converter copies it
     // into the fixed PCI BAR array. Only PCI bus devices belong to this module.
     if (description->content_type != SYS_DEVICE_CONTENT_BUS ||
-        description->content.bus.ios_count > __DEVICEMANAGER_MAX_IOSPACES) {
+        description->content.bus.ios_count > DEVICEMANAGER_MAX_IOSPACES) {
         return;
     }
     

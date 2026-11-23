@@ -468,8 +468,8 @@ __SendCommand(
             USBTRANSFER_TYPE_BULK,
             USBTRANSFER_DIRECTION_OUT,
             0,
-            dma_pool_handle(UsbRetrievePool()),
-            dma_pool_offset(UsbRetrievePool(), device->CommandBlock),
+            BufferPoolHandle(UsbRetrievePool()),
+            BufferPoolOffset(UsbRetrievePool(), device->CommandBlock),
             sizeof(MsdCommandBlock_t)
     );
 
@@ -610,8 +610,8 @@ __GetStatus(
             USBTRANSFER_TYPE_BULK,
             USBTRANSFER_DIRECTION_IN,
             0,
-            dma_pool_handle(UsbRetrievePool()),
-            dma_pool_offset(UsbRetrievePool(), device->StatusBlock),
+            BufferPoolHandle(UsbRetrievePool()),
+            BufferPoolOffset(UsbRetrievePool(), device->StatusBlock),
             sizeof(MsdCommandStatus_t)
     );
 

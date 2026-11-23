@@ -73,17 +73,17 @@ __Rp1MapIo(
     // Keep the registered range if mapping it fails. Stop can then remove the
     // registration later.
     if (io->Id == UUID_INVALID) {
-        status = CreateDeviceMemoryIo(io, (uintptr_t)address, length);
+        status = DeviceIoCreateMemory(io, (uintptr_t)address, length);
         if (status != OS_EOK) {
-            ERROR("__Rp1MapIo: CreateDeviceMemoryIo address 0x%llx, length %zu failed: %u",
+            ERROR("__Rp1MapIo: DeviceIoCreateMemory address 0x%llx, length %zu failed: %u",
                   (unsigned long long)address, length, status);
             return status;
         }
     }
     
-    status = AcquireDeviceIo(io);
+    status = DeviceIoAcquire(io);
     if (status != OS_EOK) {
-        ERROR("__Rp1MapIo: AcquireDeviceIo id %u failed: %u; registered range kept", io->Id, status);
+        ERROR("__Rp1MapIo: DeviceIoAcquire id %u failed: %u; registered range kept", io->Id, status);
     }
     return status;
 }
@@ -98,18 +98,18 @@ __Rp1UnmapIo(
     // Remove the mapping before its registration. Keep track of both if either
     // step fails so Stop can try again.
     if (io->Access.Memory.VirtualBase != 0) {
-        status = ReleaseDeviceIo(io);
+        status = DeviceIoRelease(io);
         if (status != OS_EOK) {
-            ERROR("__Rp1UnmapIo: ReleaseDeviceIo id %u failed: %u", io->Id, status);
+            ERROR("__Rp1UnmapIo: DeviceIoRelease id %u failed: %u", io->Id, status);
             return status;
         }
         io->Access.Memory.VirtualBase = 0;
     }
 
     if (io->Id != UUID_INVALID) {
-        status = DestroyDeviceIo(io);
+        status = DeviceIoDestroy(io);
         if (status != OS_EOK) {
-            ERROR("__Rp1UnmapIo: DestroyDeviceIo id %u failed: %u", io->Id, status);
+            ERROR("__Rp1UnmapIo: DeviceIoDestroy id %u failed: %u", io->Id, status);
             return status;
         }
     }
@@ -151,7 +151,7 @@ __Rp1TableRead(
     _In_ void*  mapping,
     _In_ size_t offset)
 {
-    return (uint32_t)ReadDeviceIo(mapping, offset, 4);
+    return (uint32_t)DeviceIoRead(mapping, offset, 4);
 }
 
 static void
@@ -164,12 +164,12 @@ __Rp1TableWrite(
 
     // The write callback has no error result. The MSI-X code checks the value
     // with a separate read after this callback returns.
-    status = WriteDeviceIo(mapping, offset, value, 4);
+    status = DeviceIoWrite(mapping, offset, value, 4);
     if (status != OS_EOK) {
-        ERROR("__Rp1TableWrite: WriteDeviceIo offset 0x%zx, value 0x%x failed: %u", offset, value, status);
+        ERROR("__Rp1TableWrite: DeviceIoWrite offset 0x%zx, value 0x%x failed: %u", offset, value, status);
     }
     // Complete the posted PCI write before returning.
-    (void)ReadDeviceIo(mapping, offset, 4);
+    (void)DeviceIoRead(mapping, offset, 4);
 }
 
 oserr_t
@@ -261,19 +261,19 @@ Rp1PciMessagesStart(
     
     // Disable every RP1 interrupt before allowing MSI-X messages to be sent.
     for (i = 0; i < FDT_RP1_INTERRUPT_COUNT; i++) {
-        status = WriteDeviceIo(
+        status = DeviceIoWrite(
             &runtime->Pci.Apbs,
             RP1_IRQ_CLEAR + RP1_IRQ_CFG(i),
             RP1_IRQ_ENABLE | RP1_IRQ_IACK_ENABLE,
             4
         );
         if (status != OS_EOK) {
-            ERROR("Rp1PciMessagesStart: WriteDeviceIo source %u, APBS offset 0x%x failed: %u",
+            ERROR("Rp1PciMessagesStart: DeviceIoWrite source %u, APBS offset 0x%x failed: %u",
                   i, RP1_IRQ_CLEAR + RP1_IRQ_CFG(i), status);
             return status;
         }
         
-        (void)ReadDeviceIo(&runtime->Pci.Apbs, RP1_IRQ_CFG(i), 4);
+        (void)DeviceIoRead(&runtime->Pci.Apbs, RP1_IRQ_CFG(i), 4);
         request = (struct PciInterruptRequest){
             .Operation = PciInterruptProgram,
             .Allocation = runtime->Pci.Allocation,

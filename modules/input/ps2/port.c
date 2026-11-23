@@ -141,7 +141,7 @@ PS2RegisterDevice(
     }
 
     // Lastly just register the device under the controller (todo)
-    port->DeviceId = RegisterDevice(&busDevice.Base, DEVICE_REGISTER_FLAG_LOADDRIVER);
+    port->DeviceId = DeviceRegister(&busDevice.Base, DEVICE_REGISTER_FLAG_LOADDRIVER);
     if (port->DeviceId == UUID_INVALID) {
         ERROR("Failed to register new device");
         return OS_EUNKNOWN;

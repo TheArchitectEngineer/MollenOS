@@ -58,7 +58,7 @@ HCIControllerCreate(
     }
 
     // EHCI registers use the first MMIO region.
-    for (i = 0; i < __DEVICEMANAGER_MAX_IOSPACES; i++) {
+    for (i = 0; i < DEVICEMANAGER_MAX_IOSPACES; i++) {
         if (((BusDevice_t*)controller->Base.Device)->IoSpaces[i].Type == DeviceIoMemoryBased) {
             ioBase = &((BusDevice_t*)controller->Base.Device)->IoSpaces[i];
             break;
@@ -76,7 +76,7 @@ HCIControllerCreate(
           ioBase->Type, ioBase->Access.Memory.PhysicalBase, ioBase->Access.Memory.Length);
 
     // Acquire the io-space
-    if (AcquireDeviceIo(ioBase) != OS_EOK) {
+    if (DeviceIoAcquire(ioBase) != OS_EOK) {
         ERROR("Failed to create and acquire the io-space for ehci-controller");
         HCIControllerDestroy(&controller->Base);
         return NULL;
@@ -114,7 +114,7 @@ HCIControllerCreate(
             controller->Base.Device->Id,
             OSIOCTLREQUEST_BUS_CONTROL,
             &(struct OSIOCtlBusControl) {
-                    .Flags = (__DEVICEMANAGER_IOCTL_MMIO_ENABLE)
+                    .Flags = (DEVICEMANAGER_IOCTL_MMIO_ENABLE)
             }, sizeof(struct OSIOCtlBusControl)
     );
     if (oserr != OS_EOK) {
@@ -171,7 +171,7 @@ HCIControllerDestroy(
     }
     
     if (base->IoBase != NULL) {
-        status = ReleaseDeviceIo(base->IoBase);
+        status = DeviceIoRelease(base->IoBase);
         if (status != OS_EOK) {
             goto retry;
         }
@@ -226,7 +226,7 @@ EhciDisableLegacySupport(
         // Follow the extended capability list to find USB legacy support.
         while (1) {
             // Retrieve capability id
-            if (IoctlDeviceEx(Controller->Base.Device->Id, __DEVICEMANAGER_IOCTL_EXT_READ, eecp, &capId, 1) != OS_EOK) {
+            if (DeviceIoctlEx(Controller->Base.Device->Id, DEVICEMANAGER_IOCTL_EXT_READ, eecp, &capId, 1) != OS_EOK) {
                 return;
             }
 
@@ -236,7 +236,7 @@ EhciDisableLegacySupport(
             }
 
             // Read the next capability offset.
-            if (IoctlDeviceEx(Controller->Base.Device->Id, __DEVICEMANAGER_IOCTL_EXT_READ, eecp + 0x1, &nextEecp, 1) != OS_EOK) {
+            if (DeviceIoctlEx(Controller->Base.Device->Id, DEVICEMANAGER_IOCTL_EXT_READ, eecp + 0x1, &nextEecp, 1) != OS_EOK) {
                 return;
             }
 
@@ -252,7 +252,7 @@ EhciDisableLegacySupport(
         // Only continue if Id == 0x01
         if (capId == 0x01) {
             size_t Zero = 0;
-            if (IoctlDeviceEx(Controller->Base.Device->Id, __DEVICEMANAGER_IOCTL_EXT_READ, eecp + 0x2, &semaphore, 1) != OS_EOK) {
+            if (DeviceIoctlEx(Controller->Base.Device->Id, DEVICEMANAGER_IOCTL_EXT_READ, eecp + 0x2, &semaphore, 1) != OS_EOK) {
                 return;
             }
 
@@ -260,13 +260,13 @@ EhciDisableLegacySupport(
             if (semaphore & 0x1) {
                 // Set the OS semaphore at EECP+3 to request control from BIOS.
                 size_t One = 0x1;
-                if (IoctlDeviceEx(Controller->Base.Device->Id, __DEVICEMANAGER_IOCTL_EXT_WRITE, eecp + 0x3, &One, 1) != OS_EOK) {
+                if (DeviceIoctlEx(Controller->Base.Device->Id, DEVICEMANAGER_IOCTL_EXT_WRITE, eecp + 0x3, &One, 1) != OS_EOK) {
                     return;
                 }
 
                 // Wait for BIOS to clear its semaphore.
                 while (One++) {
-                    if (IoctlDeviceEx(Controller->Base.Device->Id, __DEVICEMANAGER_IOCTL_EXT_READ, eecp + 0x2, &semaphore, 1) != OS_EOK) {
+                    if (DeviceIoctlEx(Controller->Base.Device->Id, DEVICEMANAGER_IOCTL_EXT_READ, eecp + 0x2, &semaphore, 1) != OS_EOK) {
                         return;
                     }
                     if ((semaphore & 0x1) == 0) {
@@ -280,7 +280,7 @@ EhciDisableLegacySupport(
                 }
                 One = 1;
                 while (One++) {
-                    if (IoctlDeviceEx(Controller->Base.Device->Id, __DEVICEMANAGER_IOCTL_EXT_READ, eecp + 0x3, &semaphore, 1) != OS_EOK) {
+                    if (DeviceIoctlEx(Controller->Base.Device->Id, DEVICEMANAGER_IOCTL_EXT_READ, eecp + 0x3, &semaphore, 1) != OS_EOK) {
                         return;
                     }
                     if ((semaphore & 0x1) == 1) {
@@ -295,7 +295,7 @@ EhciDisableLegacySupport(
             }
 
             // Disable SMI by setting all lower 16 bits to 0 of EECP+4
-            if (IoctlDeviceEx(Controller->Base.Device->Id, __DEVICEMANAGER_IOCTL_EXT_WRITE, eecp + 0x4, &Zero, 2) != OS_EOK) {
+            if (DeviceIoctlEx(Controller->Base.Device->Id, DEVICEMANAGER_IOCTL_EXT_WRITE, eecp + 0x4, &Zero, 2) != OS_EOK) {
                 return;
             }
         }
@@ -558,8 +558,8 @@ EhciSetup(
         Controller->Base.Device->Id,
         OSIOCTLREQUEST_BUS_CONTROL,
         &(struct OSIOCtlBusControl) {
-            .Flags = __DEVICEMANAGER_IOCTL_ENABLE | __DEVICEMANAGER_IOCTL_MMIO_ENABLE |
-                     __DEVICEMANAGER_IOCTL_BUSMASTER_ENABLE
+            .Flags = DEVICEMANAGER_IOCTL_ENABLE | DEVICEMANAGER_IOCTL_MMIO_ENABLE |
+                     DEVICEMANAGER_IOCTL_BUSMASTER_ENABLE
         },
         sizeof(struct OSIOCtlBusControl)
     );

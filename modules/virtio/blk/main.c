@@ -421,7 +421,7 @@ __ctt_storage_transfer_invocation(
         device,
         message,
         direction == SYS_TRANSFER_DIRECTION_READ ?
-            __STORAGE_OPERATION_READ : __STORAGE_OPERATION_WRITE,
+            STORAGE_OPERATION_READ : STORAGE_OPERATION_WRITE,
         sector.QuadPart,
         attachment.ID,
         offset,

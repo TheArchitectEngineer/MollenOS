@@ -167,13 +167,13 @@ __ExecuteCommand(
 
     TRACE("__ExecuteCommand(Direction %i, Command 0x%x, Start %u, Length %u)",
           direction, scsiCommand, LODWORD(sectorStart), dataLength);
-    if (direction != __STORAGE_OPERATION_READ && direction != __STORAGE_OPERATION_WRITE) {
+    if (direction != STORAGE_OPERATION_READ && direction != STORAGE_OPERATION_WRITE) {
         ERROR("__ExecuteCommand: unsupported direction");
         return OS_EINVALPARAMS;
     }
 
     // It is invalid to send zero length packets for bulk
-    if (direction == __STORAGE_OPERATION_WRITE && dataLength == 0) {
+    if (direction == STORAGE_OPERATION_WRITE && dataLength == 0) {
         ERROR("__ExecuteCommand: cannot write data of length 0 to MSD devices.");
         return OS_EINVALPARAMS;
     }
@@ -196,7 +196,7 @@ __ExecuteCommand(
     // Do the data stage (shared for all protocol)
     while (bytesLeft != 0) {
         size_t bytesTransferred = 0;
-        if (direction == __STORAGE_OPERATION_READ) {
+        if (direction == STORAGE_OPERATION_READ) {
             oserr = device->Operations->ReadData(
                     device,
                     bufferHandle,
@@ -205,7 +205,7 @@ __ExecuteCommand(
                     &transferCode,
                     &bytesTransferred
             );
-        } else if (direction == __STORAGE_OPERATION_WRITE) {
+        } else if (direction == STORAGE_OPERATION_WRITE) {
             oserr = device->Operations->WriteData(
                     device,
                     bufferHandle,
@@ -253,7 +253,7 @@ __RequestSenseReady(
 
     TRACE("MsdPrepareDevice()");
 
-    oserr = dma_pool_allocate(
+    oserr = BufferPoolAllocate(
             UsbRetrievePool(),
             sizeof(ScsiSense_t),
             (void**)&senseBlock
@@ -267,7 +267,7 @@ __RequestSenseReady(
     if (device->Protocol != ProtocolCB && device->Protocol != ProtocolCBI) {
         oserr = __ExecuteCommand(
                 device,
-                __STORAGE_OPERATION_READ,
+                STORAGE_OPERATION_READ,
                 SCSI_TEST_UNIT_READY,
                 0,
                 0,
@@ -277,7 +277,7 @@ __RequestSenseReady(
         );
         if (oserr != OS_EOK || transferCode != USBTRANSFERCODE_SUCCESS) {
             ERROR("MsdPrepareDevice: Failed to perform test-unit-ready command");
-            dma_pool_free(UsbRetrievePool(), (void*)senseBlock);
+            BufferPoolFree(UsbRetrievePool(), (void*)senseBlock);
             device->IsReady = 0;
             return oserr;
         }
@@ -286,24 +286,24 @@ __RequestSenseReady(
     // Now request the sense-status
     oserr = __ExecuteCommand(
             device,
-            __STORAGE_OPERATION_READ,
+            STORAGE_OPERATION_READ,
             SCSI_REQUEST_SENSE,
             0,
-            dma_pool_handle(UsbRetrievePool()),
-            dma_pool_offset(UsbRetrievePool(), senseBlock),
+            BufferPoolHandle(UsbRetrievePool()),
+            BufferPoolOffset(UsbRetrievePool(), senseBlock),
             sizeof(ScsiSense_t),
             &transferCode
     );
     if (oserr != OS_EOK || transferCode != USBTRANSFERCODE_SUCCESS) {
         ERROR("MsdPrepareDevice: failed to perform sense command");
-        dma_pool_free(UsbRetrievePool(), (void*)senseBlock);
+        BufferPoolFree(UsbRetrievePool(), (void*)senseBlock);
         device->IsReady = 0;
         return oserr;
     }
 
     // Extract sense-codes and key
     responseCode = SCSI_SENSE_RESPONSECODE(senseBlock->ResponseStatus);
-    dma_pool_free(UsbRetrievePool(), (void*)senseBlock);
+    BufferPoolFree(UsbRetrievePool(), (void*)senseBlock);
 
     // Must be either 0x70, 0x71, 0x72, 0x73
     if (responseCode >= 0x70 && responseCode <= 0x73) {
@@ -328,7 +328,7 @@ __ReadCapabilities(
     oserr_t              oserr;
     enum USBTransferCode transferCode;
 
-    oserr = dma_pool_allocate(
+    oserr = BufferPoolAllocate(
             UsbRetrievePool(),
             sizeof(ScsiExtendedCaps_t),
             (void**)&capabilitesPointer
@@ -340,16 +340,16 @@ __ReadCapabilities(
 
     oserr = __ExecuteCommand(
             device,
-            __STORAGE_OPERATION_READ,
+            STORAGE_OPERATION_READ,
             SCSI_READ_CAPACITY,
             0,
-            dma_pool_handle(UsbRetrievePool()),
-            dma_pool_offset(UsbRetrievePool(), capabilitesPointer),
+            BufferPoolHandle(UsbRetrievePool()),
+            BufferPoolOffset(UsbRetrievePool(), capabilitesPointer),
             8,
             &transferCode
     );
     if (oserr != OS_EOK || transferCode != USBTRANSFERCODE_SUCCESS) {
-        dma_pool_free(UsbRetrievePool(), (void*)capabilitesPointer);
+        BufferPoolFree(UsbRetrievePool(), (void*)capabilitesPointer);
         return oserr;
     }
 
@@ -361,16 +361,16 @@ __ReadCapabilities(
         // Perform extended-caps read command
         oserr = __ExecuteCommand(
                 device,
-                __STORAGE_OPERATION_READ,
+                STORAGE_OPERATION_READ,
                 SCSI_READ_CAPACITY_16,
                 0,
-                dma_pool_handle(UsbRetrievePool()),
-                dma_pool_offset(UsbRetrievePool(), capabilitesPointer),
+                BufferPoolHandle(UsbRetrievePool()),
+                BufferPoolOffset(UsbRetrievePool(), capabilitesPointer),
                 sizeof(ScsiExtendedCaps_t),
                 &transferCode
         );
         if (oserr != OS_EOK || transferCode != USBTRANSFERCODE_SUCCESS) {
-            dma_pool_free(UsbRetrievePool(), (void*)capabilitesPointer);
+            BufferPoolFree(UsbRetrievePool(), (void*)capabilitesPointer);
             return oserr;
         }
 
@@ -380,7 +380,7 @@ __ReadCapabilities(
         TRACE("__ReadCapabilities: sectorCount=%llu, sectorSize=%u", descriptor->SectorCount,
               descriptor->SectorSize);
         device->IsExtended = 1;
-        dma_pool_free(UsbRetrievePool(), (void*)capabilitesPointer);
+        BufferPoolFree(UsbRetrievePool(), (void*)capabilitesPointer);
         return OS_EOK;
     }
 
@@ -389,7 +389,7 @@ __ReadCapabilities(
     descriptor->SectorSize = rev32(capabilitesPointer[1]);
     TRACE("__ReadCapabilities: sectorCount=%llu, sectorSize=%u",
           descriptor->SectorCount, descriptor->SectorSize);
-    dma_pool_free(UsbRetrievePool(), (void*)capabilitesPointer);
+    BufferPoolFree(UsbRetrievePool(), (void*)capabilitesPointer);
     return OS_EOK;
 }
 
@@ -406,7 +406,7 @@ MSDDeviceStart(
     // Floppys need a lot longer to spin up
     i = (device->Protocol != ProtocolCB && device->Protocol != ProtocolCBI) ? 30 : 3;
 
-    oserr = dma_pool_allocate(
+    oserr = BufferPoolAllocate(
             UsbRetrievePool(),
             sizeof(ScsiInquiry_t),
             (void**)&inquiryData
@@ -418,17 +418,17 @@ MSDDeviceStart(
 
     oserr = __ExecuteCommand(
             device,
-            __STORAGE_OPERATION_READ,
+            STORAGE_OPERATION_READ,
             SCSI_INQUIRY,
             0,
-            dma_pool_handle(UsbRetrievePool()),
-            dma_pool_offset(UsbRetrievePool(), inquiryData),
+            BufferPoolHandle(UsbRetrievePool()),
+            BufferPoolOffset(UsbRetrievePool(), inquiryData),
             sizeof(ScsiInquiry_t),
             &transferCode
     );
     if (oserr != OS_EOK || transferCode != USBTRANSFERCODE_SUCCESS) {
         ERROR("MSDDeviceStart: failed to perform the inquiry command on device: %u", transferCode);
-        dma_pool_free(UsbRetrievePool(), (void*)inquiryData);
+        BufferPoolFree(UsbRetrievePool(), (void*)inquiryData);
         return oserr;
     }
 
@@ -446,11 +446,11 @@ MSDDeviceStart(
     // ready otherwise we can't use it
     if (!device->IsReady) {
         ERROR("MSDDeviceStart: failed to ready device");
-        dma_pool_free(UsbRetrievePool(), (void*)inquiryData);
+        BufferPoolFree(UsbRetrievePool(), (void*)inquiryData);
         return OS_EUNKNOWN;
     }
 
-    dma_pool_free(UsbRetrievePool(), (void*)inquiryData);
+    BufferPoolFree(UsbRetrievePool(), (void*)inquiryData);
     return __ReadCapabilities(device);
 }
 
@@ -463,13 +463,13 @@ __SelectScsiTransferCommand(
 {
     // Detect limits based on type of device and protocol
     if (device->Protocol == ProtocolCB || device->Protocol == ProtocolCBI) {
-        *commandOut         = (direction == __STORAGE_OPERATION_READ) ? SCSI_READ_6 : SCSI_WRITE_6;
+        *commandOut         = (direction == STORAGE_OPERATION_READ) ? SCSI_READ_6 : SCSI_WRITE_6;
         *maxSectorsCountOut = UINT8_MAX;
     } else if (!device->IsExtended) {
-        *commandOut         = (direction == __STORAGE_OPERATION_READ) ? SCSI_READ : SCSI_WRITE;
+        *commandOut         = (direction == STORAGE_OPERATION_READ) ? SCSI_READ : SCSI_WRITE;
         *maxSectorsCountOut = UINT16_MAX;
     } else {
-        *commandOut         = (direction == __STORAGE_OPERATION_READ) ? SCSI_READ_16 : SCSI_WRITE_16;
+        *commandOut         = (direction == STORAGE_OPERATION_READ) ? SCSI_READ_16 : SCSI_WRITE_16;
         *maxSectorsCountOut = UINT32_MAX;
     }
 }
@@ -591,7 +591,7 @@ ctt_storage_transfer_invocation(
     status = __TransferSectors(
         device,
         direction == SYS_TRANSFER_DIRECTION_READ ?
-            __STORAGE_OPERATION_READ : __STORAGE_OPERATION_WRITE,
+            STORAGE_OPERATION_READ : STORAGE_OPERATION_WRITE,
         sector.QuadPart,
         attachment.ID,
         offset,

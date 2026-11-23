@@ -18,7 +18,7 @@
 #ifndef __USB_XHCI_DWC3_H__
 #define __USB_XHCI_DWC3_H__
 
-#include <ddk/resources.h>
+#include <ddk/devices/resources.h>
 
 /**
  * Keep the register mapping valid until all changed settings are restored.

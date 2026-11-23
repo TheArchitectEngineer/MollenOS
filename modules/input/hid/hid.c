@@ -255,7 +255,7 @@ HidDeviceCreate(
     }
 
     // Allocate a ringbuffer for use
-    if (dma_pool_allocate(UsbRetrievePool(), 0x400, (void**)&hidDevice->Buffer) != OS_EOK) {
+    if (BufferPoolAllocate(UsbRetrievePool(), 0x400, (void**)&hidDevice->Buffer) != OS_EOK) {
         ERROR("HidDeviceCreate failed to allocate reusable buffer (interrupt-buffer)");
         goto error_exit;
     }
@@ -272,8 +272,8 @@ HidDeviceCreate(
             USBTRANSFER_TYPE_INTERRUPT,
             USBTRANSFER_DIRECTION_IN,
             0,
-            dma_pool_handle(UsbRetrievePool()),
-            dma_pool_offset(UsbRetrievePool(), hidDevice->Buffer),
+            BufferPoolHandle(UsbRetrievePool()),
+            BufferPoolOffset(UsbRetrievePool(), hidDevice->Buffer),
             0x400
     );
 
@@ -304,7 +304,7 @@ HidDeviceDestroy(
     __UnsubscribeToController(hidDevice->Base->DeviceContext.controller_driver_id);
 
     if (hidDevice->Buffer != NULL) {
-        dma_pool_free(UsbRetrievePool(), hidDevice->Buffer);
+        BufferPoolFree(UsbRetrievePool(), hidDevice->Buffer);
     }
     free(hidDevice->Interrupt);
     HidCollectionCleanup(hidDevice);

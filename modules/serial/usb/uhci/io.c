@@ -30,7 +30,7 @@ UhciRead8(
 	_In_ UhciController_t*  Controller, 
 	_In_ uint16_t           Register)
 {
-	return LOBYTE(ReadDeviceIo(Controller->Base.IoBase, Register, 1));
+	return LOBYTE(DeviceIoRead(Controller->Base.IoBase, Register, 1));
 }
 
 uint16_t
@@ -38,7 +38,7 @@ UhciRead16(
 	_In_ UhciController_t*  Controller, 
 	_In_ uint16_t           Register)
 {
-	return LOWORD(ReadDeviceIo(Controller->Base.IoBase, Register, 2));
+	return LOWORD(DeviceIoRead(Controller->Base.IoBase, Register, 2));
 }
 
 uint32_t
@@ -46,7 +46,7 @@ UhciRead32(
 	_In_ UhciController_t*  Controller, 
 	_In_ uint16_t           Register)
 {
-	return LODWORD(ReadDeviceIo(Controller->Base.IoBase, Register, 4));
+	return LODWORD(DeviceIoRead(Controller->Base.IoBase, Register, 4));
 }
 
 void
@@ -55,7 +55,7 @@ UhciWrite8(
 	_In_ uint16_t           Register, 
 	_In_ uint8_t            Value)
 {
-	WriteDeviceIo(Controller->Base.IoBase, Register, Value, 1);
+	DeviceIoWrite(Controller->Base.IoBase, Register, Value, 1);
 }
 
 void
@@ -64,7 +64,7 @@ UhciWrite16(
 	_In_ uint16_t           Register, 
 	_In_ uint16_t           Value)
 { 
-	WriteDeviceIo(Controller->Base.IoBase, Register, Value, 2);
+	DeviceIoWrite(Controller->Base.IoBase, Register, Value, 2);
 }
 
 void 
@@ -73,5 +73,5 @@ UhciWrite32(
 	_In_ uint16_t           Register, 
 	_In_ uint32_t           Value)
 {
-	WriteDeviceIo(Controller->Base.IoBase, Register, Value, 4);
+	DeviceIoWrite(Controller->Base.IoBase, Register, Value, 4);
 }

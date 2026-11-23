@@ -84,14 +84,14 @@ __WriteSetting(
     uint32_t value;
     oserr_t  status;
 
-    value = (uint32_t)ReadDeviceIo(registers, offset, 4);
+    value = (uint32_t)DeviceIoRead(registers, offset, 4);
     value = (value & ~setting->Mask) | (bits & setting->Mask);
-    status = WriteDeviceIo(registers, offset, value, 4);
+    status = DeviceIoWrite(registers, offset, value, 4);
     if (status != OS_EOK) {
         return status;
     }
     
-    if ((ReadDeviceIo(registers, offset, 4) & setting->Mask) != (value & setting->Mask)) {
+    if ((DeviceIoRead(registers, offset, 4) & setting->Mask) != (value & setting->Mask)) {
         return OS_EUNKNOWN;
     }
     return OS_EOK;
@@ -125,12 +125,12 @@ Dwc3Prepare(
     }
 
     // Accept only Synopsys DWC3 cores that report host mode in GHWPARAMS0.
-    identity = (uint32_t)ReadDeviceIo(
+    identity = (uint32_t)DeviceIoRead(
         registers,
         DWC3_GLOBAL_BASE + DWC3_GSNPSID_OFFSET,
         4
     );
-    mode = (uint32_t)ReadDeviceIo(
+    mode = (uint32_t)DeviceIoRead(
         registers,
         DWC3_GLOBAL_BASE + DWC3_GHWPARAMS0_OFFSET,
         4
@@ -144,7 +144,7 @@ Dwc3Prepare(
     for (unsigned int i = 0; i < SIZEOF_ARRAY(g_rp1C0Settings); i++) {
         const struct __Dwc3Setting* setting = &g_rp1C0Settings[i];
         
-        integration->Original[i] = (uint32_t)ReadDeviceIo(
+        integration->Original[i] = (uint32_t)DeviceIoRead(
             registers,
             DWC3_GLOBAL_BASE + setting->Offset,
             4

@@ -52,7 +52,7 @@ __LegacySelect(
     // within the aligned 32-bit register.
     address = 0x80000000 | (Bus << 16) | (Device << 11) |
               (Function << 8) | (Register & 0xFC);
-    status = WriteDeviceIo(&Io->IoSpace, PCI_REGISTER_SELECT, address, 4);
+    status = DeviceIoWrite(&Io->IoSpace, PCI_REGISTER_SELECT, address, 4);
     if (status != OS_EOK) {
         ERROR("__LegacySelect %u:%u.%u register 0x%x selection failed: %u",
             Bus, Device, Function, (unsigned)Register, status);
@@ -72,7 +72,7 @@ __LegacyRead(
     _In_ size_t       width)
 {
     __LegacySelect(host, bus, slot, function, reg);
-    return ReadDeviceIo(&host->IoSpace, __LEGACY_DATA_PORT(reg, width), width);
+    return DeviceIoRead(&host->IoSpace, __LEGACY_DATA_PORT(reg, width), width);
 }
 
 static void
@@ -88,7 +88,7 @@ __LegacyWrite(
     oserr_t status;
 
     __LegacySelect(host, bus, slot, function, reg);
-    status = WriteDeviceIo(&host->IoSpace, __LEGACY_DATA_PORT(reg, width), value, width);
+    status = DeviceIoWrite(&host->IoSpace, __LEGACY_DATA_PORT(reg, width), value, width);
     if (status != OS_EOK) {
         ERROR("__LegacyWrite %u:%u.%u register 0x%x failed: %u",
             bus, slot, function, (unsigned)reg, status);
@@ -140,14 +140,14 @@ PciLegacyHostCreate(
     bus->Operations = &g_pciLegacyOperations;
     bus->IoResourcePolicy = PciIoResourcePorts;
 
-    oserr = CreateDevicePortIo(&bus->IoSpace, PCI_IO_BASE, PCI_IO_LENGTH);
+    oserr = DeviceIoCreatePort(&bus->IoSpace, PCI_IO_BASE, PCI_IO_LENGTH);
     if (oserr != OS_EOK) {
         ERROR("PciLegacyHostCreate failed to create configuration ports: %u", oserr);
         free(bus);
         return oserr;
     }
 
-    oserr = AcquireDeviceIo(&bus->IoSpace);
+    oserr = DeviceIoAcquire(&bus->IoSpace);
     if (oserr != OS_EOK) {
         ERROR("PciLegacyHostCreate failed to acquire configuration ports: %u", oserr);
         cleanup = DmIoRelease(&bus->IoSpace, &bus->IoAcquired);

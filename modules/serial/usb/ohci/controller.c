@@ -58,7 +58,7 @@ HCIControllerCreate(
     }
     
     // OHCI registers use the first MMIO space.
-    for (int i = 0; i < __DEVICEMANAGER_MAX_IOSPACES; i++) {
+    for (int i = 0; i < DEVICEMANAGER_MAX_IOSPACES; i++) {
         if (((BusDevice_t*)controller->Base.Device)->IoSpaces[i].Type == DeviceIoMemoryBased) {
             ioBase = &((BusDevice_t*)controller->Base.Device)->IoSpaces[i];
             break;
@@ -77,7 +77,7 @@ HCIControllerCreate(
           ioBase->Type, ioBase->Access.Memory.PhysicalBase, ioBase->Access.Memory.Length);
 
     // Acquire the io-space
-    if (AcquireDeviceIo(ioBase) != OS_EOK) {
+    if (DeviceIoAcquire(ioBase) != OS_EOK) {
         ERROR("Failed to create and acquire the io-space for ohci-controller");
         HCIControllerDestroy(&controller->Base);
         return NULL;
@@ -141,8 +141,8 @@ HCIControllerCreate(
             controller->Base.Device->Id,
             OSIOCTLREQUEST_BUS_CONTROL,
             &(struct OSIOCtlBusControl) {
-                    .Flags = (__DEVICEMANAGER_IOCTL_ENABLE | __DEVICEMANAGER_IOCTL_MMIO_ENABLE |
-                              __DEVICEMANAGER_IOCTL_BUSMASTER_ENABLE)
+                    .Flags = (DEVICEMANAGER_IOCTL_ENABLE | DEVICEMANAGER_IOCTL_MMIO_ENABLE |
+                              DEVICEMANAGER_IOCTL_BUSMASTER_ENABLE)
             }, sizeof(struct OSIOCtlBusControl)
     );
     if (oserr != OS_EOK) {
@@ -206,7 +206,7 @@ HCIControllerDestroy(
     }
     
     if (base->IoBase != NULL) {
-        status = ReleaseDeviceIo(base->IoBase);
+        status = DeviceIoRelease(base->IoBase);
         if (status != OS_EOK) {
             goto retry;
         }

@@ -202,7 +202,7 @@ int chef_package_load(
     // requested: the reader also loads the compressed root descriptor.
     struct VaFsReaderConfiguration configuration;
     struct VaFsCodec codecs[2];
-    DdkInitrdConfigureVafsReader(&configuration);
+    InitrdConfigureVafsReader(&configuration);
     codecs[0] = configuration.SupportedCodecs[0];
     codecs[1] = (struct VaFsCodec) { .ID = "zstd", .Decode = __decode_zstd };
     vafs_reader_config_set_codecs(&configuration, codecs, 2);

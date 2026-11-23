@@ -25,7 +25,7 @@
 #include <ddk/interrupts/interrupt.h>
 #include <ddk/interrupts/bus.h>
 #include <ddk/devices/bus.h>
-#include <ddk/resources.h>
+#include <ddk/devices/resources.h>
 #include <ddk/utils.h>
 #include <string.h>
 
@@ -66,30 +66,30 @@ __PciSetBusControl(
                   | PCI_COMMAND_MMIO | PCI_COMMAND_PORTIO | PCI_COMMAND_INTDISABLE);
 
     // Keep INTx disabled until the MSI reservation is released.
-    if (device->Msi.Active || !(request->Flags & __DEVICEMANAGER_IOCTL_ENABLE)) {
+    if (device->Msi.Active || !(request->Flags & DEVICEMANAGER_IOCTL_ENABLE)) {
         settings |= PCI_COMMAND_INTDISABLE;
     }
 
     // I/O and memory decoding.
-    if (request->Flags & __DEVICEMANAGER_IOCTL_MMIO_ENABLE) {
+    if (request->Flags & DEVICEMANAGER_IOCTL_MMIO_ENABLE) {
         settings |= PCI_COMMAND_MMIO;
     }
-    if (request->Flags & __DEVICEMANAGER_IOCTL_IO_ENABLE) {
+    if (request->Flags & DEVICEMANAGER_IOCTL_IO_ENABLE) {
         settings |= PCI_COMMAND_PORTIO;
     }
 
     // Bus mastering.
-    if (request->Flags & __DEVICEMANAGER_IOCTL_BUSMASTER_ENABLE) {
+    if (request->Flags & DEVICEMANAGER_IOCTL_BUSMASTER_ENABLE) {
         settings |= PCI_COMMAND_BUSMASTER;
     }
 
     // Fast back-to-back transactions.
-    if (request->Flags & __DEVICEMANAGER_IOCTL_FASTBTB_ENABLE) {
+    if (request->Flags & DEVICEMANAGER_IOCTL_FASTBTB_ENABLE) {
         settings |= PCI_COMMAND_FASTBTB;
     }
 
     // Memory write and invalidate is enabled here but never cleared.
-    if (request->Flags & __DEVICEMANAGER_IOCTL_MEMWRTINVD_ENABLE) {
+    if (request->Flags & DEVICEMANAGER_IOCTL_MEMWRTINVD_ENABLE) {
         settings |= PCI_COMMAND_MEMWRITE;
     }
 
@@ -110,7 +110,7 @@ __PciSetBusControl(
     // disabled in hardware while MSI is reserved.
     if (device->Msi.Active) {
         device->Msi.Command &= ~PCI_COMMAND_INTDISABLE;
-        if (!(request->Flags & __DEVICEMANAGER_IOCTL_ENABLE)) {
+        if (!(request->Flags & DEVICEMANAGER_IOCTL_ENABLE)) {
             device->Msi.Command |= PCI_COMMAND_INTDISABLE;
         }
     }
@@ -133,7 +133,7 @@ __PciIoctlDevice(
 
     // Configuration accesses must be 1, 2 or 4 bytes, aligned to their width,
     // and within the host's configuration space.
-    if (direction != __DEVICEMANAGER_IOCTL_EXT_READ && direction != __DEVICEMANAGER_IOCTL_EXT_WRITE) {
+    if (direction != DEVICEMANAGER_IOCTL_EXT_READ && direction != DEVICEMANAGER_IOCTL_EXT_WRITE) {
         WARNING("__PciIoctlDevice invalid direction %i", direction);
         return OS_EINVALPARAMS;
     }
@@ -149,7 +149,7 @@ __PciIoctlDevice(
         return OS_EINVALPARAMS;
     }
 
-    if (direction == __DEVICEMANAGER_IOCTL_EXT_READ) {
+    if (direction == DEVICEMANAGER_IOCTL_EXT_READ) {
         *value = PciDeviceRead(device, reg, width);
         return OS_EOK;
     }
@@ -259,7 +259,7 @@ __PciBusControl(
         }
         
         memset(resources, 0, sizeof(struct DeviceResources));
-        for (unsigned int i = 0; i < __DEVICEMANAGER_MAX_IOSPACES; i++) {
+        for (unsigned int i = 0; i < DEVICEMANAGER_MAX_IOSPACES; i++) {
             if (device->PublishedIo[i].Id != UUID_INVALID) {
                 resources->Registers[resources->Count++] = device->PublishedIo[i];
             }
@@ -283,9 +283,9 @@ __PciBusControl(
             return OS_EINVALPARAMS;
         }
         
-        activation.Flags = __DEVICEMANAGER_IOCTL_MMIO_ENABLE;
+        activation.Flags = DEVICEMANAGER_IOCTL_MMIO_ENABLE;
         if (stage == DeviceStart) {
-            activation.Flags |= __DEVICEMANAGER_IOCTL_ENABLE | __DEVICEMANAGER_IOCTL_BUSMASTER_ENABLE;
+            activation.Flags |= DEVICEMANAGER_IOCTL_ENABLE | DEVICEMANAGER_IOCTL_BUSMASTER_ENABLE;
         }
 
         PciCriticalSectionEnter();

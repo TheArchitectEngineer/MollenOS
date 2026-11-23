@@ -85,16 +85,16 @@ BcmPciMapRegisters(
         return OS_ENOTSUPPORTED;
     }
     
-    status = CreateDeviceMemoryIo(io, (uintptr_t)base, (size_t)length);
+    status = DeviceIoCreateMemory(io, (uintptr_t)base, (size_t)length);
     if (status != OS_EOK) {
         memset(io, 0, sizeof(*io));
-        ERROR("BcmPciMapRegisters CreateDeviceMemoryIo failed: %u", status);
+        ERROR("BcmPciMapRegisters DeviceIoCreateMemory failed: %u", status);
         return status;
     }
    
-    status = AcquireDeviceIo(io);
+    status = DeviceIoAcquire(io);
     if (status != OS_EOK) {
-        ERROR("BcmPciMapRegisters AcquireDeviceIo failed: %u", status);
+        ERROR("BcmPciMapRegisters DeviceIoAcquire failed: %u", status);
         // The caller must release the registration even when mapping it fails.
         return status;
     }
@@ -135,7 +135,7 @@ BcmPciRescal(
 
     // Pi 5 ports share this calibration block. Reuse its completed result so
     // starting another port does not interrupt a port that is already working.
-    value = (uint32_t)ReadDeviceIo(reset, 8, 4);
+    value = (uint32_t)DeviceIoRead(reset, 8, 4);
     if (reuseCompleted && value != UINT32_MAX && (value & 1)) {
         TRACE("BcmPciRescal reusing completed shared calibration");
         goto cleanup;
@@ -143,13 +143,13 @@ BcmPciRescal(
 
     // Read the enable bit back because a successful write does not prove that
     // the hardware accepted the request.
-    value = (uint32_t)ReadDeviceIo(reset, 0, 4);
+    value = (uint32_t)DeviceIoRead(reset, 0, 4);
     controller->RescalPendingClear = 1;
-    status = WriteDeviceIo(reset, 0, value | 1, 4);
+    status = DeviceIoWrite(reset, 0, value | 1, 4);
     if (status != OS_EOK) {
         ERROR("BcmPciRescal failed to start calibration: %u", status);
     } else {
-        value = (uint32_t)ReadDeviceIo(reset, 0, 4);
+        value = (uint32_t)DeviceIoRead(reset, 0, 4);
         if (!(value & 1)) {
             ERROR("BcmPciRescal start bit did not latch, read back 0x%x", value);
             status = OS_EUNKNOWN;
@@ -159,7 +159,7 @@ BcmPciRescal(
     // The start write may have reached hardware even if it failed. Bound the
     // wait and clear the request before releasing the mapping.
     for (attempt = 0; attempt < 10; attempt++) {
-        value = (uint32_t)ReadDeviceIo(reset, 8, 4);
+        value = (uint32_t)DeviceIoRead(reset, 8, 4);
         if (value != UINT32_MAX && (value & 1)) {
             break;
         }
@@ -173,8 +173,8 @@ BcmPciRescal(
 
     // Clear the request even after a timeout, and keep the earlier error if
     // clearing it also fails.
-    value = (uint32_t)ReadDeviceIo(reset, 0, 4);
-    cleanupStatus = WriteDeviceIo(reset, 0, value & ~1U, 4);
+    value = (uint32_t)DeviceIoRead(reset, 0, 4);
+    cleanupStatus = DeviceIoWrite(reset, 0, value & ~1U, 4);
     if (cleanupStatus != OS_EOK) {
         ERROR("BcmPciRescal failed to clear calibration request: %u", cleanupStatus);
         if (status == OS_EOK) {
@@ -207,11 +207,11 @@ BcmPciUpdate(
     _In_ uint32_t   mask,
     _In_ uint32_t   value)
 {
-    uint32_t previous = (uint32_t)ReadDeviceIo(&bus->IoSpace, reg, 4);
+    uint32_t previous = (uint32_t)DeviceIoRead(&bus->IoSpace, reg, 4);
     oserr_t  status;
 
     // The caller must keep value inside mask so other register bits stay unchanged.
-    status = WriteDeviceIo(&bus->IoSpace, reg, (previous & ~mask) | value, 4);
+    status = DeviceIoWrite(&bus->IoSpace, reg, (previous & ~mask) | value, 4);
     if (status != OS_EOK) {
         ERROR("BcmPciUpdate register 0x%x mask 0x%x value 0x%x failed: %u",
             (unsigned)reg, mask, value, status);
@@ -224,7 +224,7 @@ int
 BcmPciLinkUp(
     _In_ PciHost_t* bus)
 {
-    uint32_t status = (uint32_t)ReadDeviceIo(&bus->IoSpace, BCM_LINK_STATUS, 4);
+    uint32_t status = (uint32_t)DeviceIoRead(&bus->IoSpace, BCM_LINK_STATUS, 4);
 
     // Reject an all-ones read even though it includes the link-up status bits.
     return status != UINT32_MAX &&
@@ -299,20 +299,20 @@ __BcmConfigOffset(
         return 0;
     }
     
-    status = WriteDeviceIo(
+    status = DeviceIoWrite(
         &bus->IoSpace,
         controller->Variant->ConfigIndex,
         (number << 20) | (slot << 15) | (function << 12),
         4
     );
     if (status != OS_EOK) {
-        ERROR("__BcmConfigOffset WriteDeviceIo register 0x%x failed: %u",
+        ERROR("__BcmConfigOffset DeviceIoWrite register 0x%x failed: %u",
             (unsigned)(controller->Variant->ConfigIndex), status);
         return 0;
     }
     
     // Read back the index to finish the write before accessing the data window.
-    (void)ReadDeviceIo(&bus->IoSpace, controller->Variant->ConfigIndex, 4);
+    (void)DeviceIoRead(&bus->IoSpace, controller->Variant->ConfigIndex, 4);
 
     if (!BcmPciLinkUp(bus)) {
         return 0;
@@ -345,7 +345,7 @@ __BcmRead(
     }
 
     if (__BcmConfigOffset(bus, number, slot, function, reg, width, &offset)) {
-        value = ReadDeviceIo(&bus->IoSpace, offset, width);
+        value = DeviceIoRead(&bus->IoSpace, offset, width);
     }
 
     status = mtx_unlock(&controller->ConfigLock);
@@ -379,7 +379,7 @@ __BcmWrite(
     }
     
     if (__BcmConfigOffset(bus, number, slot, function, reg, width, &offset)) {
-        status = WriteDeviceIo(&bus->IoSpace, offset, value, width);
+        status = DeviceIoWrite(&bus->IoSpace, offset, value, width);
         if (status != OS_EOK) {
             ERROR("__BcmWrite %u:%u.%u register 0x%x failed: %u",
                 number, slot, function, (unsigned)reg, status);
@@ -603,56 +603,56 @@ __BcmBridgeWindow(
     }
 
     // Set the bridge ranges before enabling memory forwarding to PCI devices.
-    status = WriteDeviceIo(&bus->IoSpace, 0x20, memory, 4);
+    status = DeviceIoWrite(&bus->IoSpace, 0x20, memory, 4);
     if (status != OS_EOK) {
-        ERROR("__BcmBridgeWindow WriteDeviceIo register 0x%x failed: %u",
+        ERROR("__BcmBridgeWindow DeviceIoWrite register 0x%x failed: %u",
             (unsigned)(0x20), status);
         return status;
     }
     
-    status = WriteDeviceIo(&bus->IoSpace, 0x24, prefetch, 4);
+    status = DeviceIoWrite(&bus->IoSpace, 0x24, prefetch, 4);
     if (status != OS_EOK) {
-        ERROR("__BcmBridgeWindow WriteDeviceIo register 0x%x failed: %u",
+        ERROR("__BcmBridgeWindow DeviceIoWrite register 0x%x failed: %u",
             (unsigned)(0x24), status);
         return status;
     }
 
-    status = WriteDeviceIo(&bus->IoSpace, 0x28, base[1] == UINT64_MAX ? 0 : base[1] >> 32, 4);
+    status = DeviceIoWrite(&bus->IoSpace, 0x28, base[1] == UINT64_MAX ? 0 : base[1] >> 32, 4);
     if (status != OS_EOK) {
-        ERROR("__BcmBridgeWindow WriteDeviceIo register 0x%x failed: %u",
+        ERROR("__BcmBridgeWindow DeviceIoWrite register 0x%x failed: %u",
             (unsigned)(0x28), status);
         return status;
     }
 
-    status = WriteDeviceIo(&bus->IoSpace, 0x2C, limit[1] >> 32, 4);
+    status = DeviceIoWrite(&bus->IoSpace, 0x2C, limit[1] >> 32, 4);
     if (status != OS_EOK) {
-        ERROR("__BcmBridgeWindow WriteDeviceIo register 0x%x failed: %u",
+        ERROR("__BcmBridgeWindow DeviceIoWrite register 0x%x failed: %u",
             (unsigned)(0x2C), status);
         return status;
     }
 
-    status = WriteDeviceIo(&bus->IoSpace, 0x1C, 0x00F0, 2);
+    status = DeviceIoWrite(&bus->IoSpace, 0x1C, 0x00F0, 2);
     if (status != OS_EOK) {
-        ERROR("__BcmBridgeWindow WriteDeviceIo register 0x%x failed: %u",
+        ERROR("__BcmBridgeWindow DeviceIoWrite register 0x%x failed: %u",
             (unsigned)(0x1C), status);
         return status;
     }
 
-    command = (uint32_t)ReadDeviceIo(&bus->IoSpace, 0x04, 2);
+    command = (uint32_t)DeviceIoRead(&bus->IoSpace, 0x04, 2);
     if (command == UINT16_MAX) {
         ERROR("__BcmBridgeWindow: segment %u command register is inaccessible", firmware->Segment);
         return OS_EUNKNOWN;
     }
 
     command = (command & ~PCI_COMMAND_PORTIO) | PCI_COMMAND_MMIO | PCI_COMMAND_BUSMASTER;
-    status = WriteDeviceIo(&bus->IoSpace, 0x04, command, 2);
+    status = DeviceIoWrite(&bus->IoSpace, 0x04, command, 2);
     if (status != OS_EOK) {
-        ERROR("__BcmBridgeWindow WriteDeviceIo register 0x%x failed: %u",
+        ERROR("__BcmBridgeWindow DeviceIoWrite register 0x%x failed: %u",
             (unsigned)(0x04), status);
         return status;
     }
 
-    observed = (uint32_t)ReadDeviceIo(&bus->IoSpace, 0x04, 2);
+    observed = (uint32_t)DeviceIoRead(&bus->IoSpace, 0x04, 2);
     if (observed == UINT16_MAX ||
         (observed & (PCI_COMMAND_PORTIO | PCI_COMMAND_MMIO | PCI_COMMAND_BUSMASTER)) !=
             (PCI_COMMAND_MMIO | PCI_COMMAND_BUSMASTER)) {
@@ -675,23 +675,23 @@ __BcmWindows(
     // Clear all four hardware ranges first so settings left by earlier firmware
     // cannot conflict with the ranges this driver is about to install.
     for (uint32_t index = 0; index < 4; index++) {
-        status = WriteDeviceIo(&bus->IoSpace, BCM_OUTBOUND_BASE_LIMIT + index * 4, 0xFFF0, 4);
+        status = DeviceIoWrite(&bus->IoSpace, BCM_OUTBOUND_BASE_LIMIT + index * 4, 0xFFF0, 4);
         if (status != OS_EOK) {
-            ERROR("__BcmWindows WriteDeviceIo register 0x%x failed: %u",
+            ERROR("__BcmWindows DeviceIoWrite register 0x%x failed: %u",
                 (unsigned)(BCM_OUTBOUND_BASE_LIMIT + index * 4), status);
             return status;
         }
 
-        status = WriteDeviceIo(&bus->IoSpace, BCM_OUTBOUND_BASE_HIGH + index * 8, 0, 4);
+        status = DeviceIoWrite(&bus->IoSpace, BCM_OUTBOUND_BASE_HIGH + index * 8, 0, 4);
         if (status != OS_EOK) {
-            ERROR("__BcmWindows WriteDeviceIo register 0x%x failed: %u",
+            ERROR("__BcmWindows DeviceIoWrite register 0x%x failed: %u",
                 (unsigned)(BCM_OUTBOUND_BASE_HIGH + index * 8), status);
             return status;
         }
 
-        status = WriteDeviceIo(&bus->IoSpace, BCM_OUTBOUND_BASE_HIGH + index * 8 + 4, 0, 4);
+        status = DeviceIoWrite(&bus->IoSpace, BCM_OUTBOUND_BASE_HIGH + index * 8 + 4, 0, 4);
         if (status != OS_EOK) {
-            ERROR("__BcmWindows WriteDeviceIo register 0x%x failed: %u",
+            ERROR("__BcmWindows DeviceIoWrite register 0x%x failed: %u",
                 (unsigned)(BCM_OUTBOUND_BASE_HIGH + index * 8 + 4), status);
             return status;
         }
@@ -705,62 +705,62 @@ __BcmWindows(
         uint64_t                   base = window->PhysicalBase >> 20;
         uint64_t                   limit = (window->PhysicalBase + window->Length - 1) >> 20;
 
-        status = WriteDeviceIo(
+        status = DeviceIoWrite(
             &bus->IoSpace,
             BCM_OUTBOUND_TARGET + index * 8,
             (uint32_t)window->BusBase,
             4
         );
         if (status != OS_EOK) {
-            ERROR("__BcmWindows WriteDeviceIo register 0x%x failed: %u",
+            ERROR("__BcmWindows DeviceIoWrite register 0x%x failed: %u",
                 (unsigned)(BCM_OUTBOUND_TARGET + index * 8), status);
             return status;
         }
 
-        status = WriteDeviceIo(
+        status = DeviceIoWrite(
             &bus->IoSpace,
             BCM_OUTBOUND_TARGET + index * 8 + 4,
             (uint32_t)(window->BusBase >> 32),
             4
         );
         if (status != OS_EOK) {
-            ERROR("__BcmWindows WriteDeviceIo register 0x%x failed: %u",
+            ERROR("__BcmWindows DeviceIoWrite register 0x%x failed: %u",
                 (unsigned)(BCM_OUTBOUND_TARGET + index * 8 + 4), status);
             return status;
         }
 
-        status = WriteDeviceIo(
+        status = DeviceIoWrite(
             &bus->IoSpace,
             BCM_OUTBOUND_BASE_HIGH + index * 8,
             (uint32_t)(base >> 12),
             4
         );
         if (status != OS_EOK) {
-            ERROR("__BcmWindows WriteDeviceIo register 0x%x failed: %u",
+            ERROR("__BcmWindows DeviceIoWrite register 0x%x failed: %u",
                 (unsigned)(BCM_OUTBOUND_BASE_HIGH + index * 8), status);
             return status;
         }
 
-        status = WriteDeviceIo(
+        status = DeviceIoWrite(
             &bus->IoSpace,
             BCM_OUTBOUND_BASE_HIGH + index * 8 + 4,
             (uint32_t)(limit >> 12),
             4
         );
         if (status != OS_EOK) {
-            ERROR("__BcmWindows WriteDeviceIo register 0x%x failed: %u",
+            ERROR("__BcmWindows DeviceIoWrite register 0x%x failed: %u",
                 (unsigned)(BCM_OUTBOUND_BASE_HIGH + index * 8 + 4), status);
             return status;
         }
 
-        status = WriteDeviceIo(
+        status = DeviceIoWrite(
             &bus->IoSpace,
             BCM_OUTBOUND_BASE_LIMIT + index * 4,
             ((uint32_t)base & 0xFFF) << 4 | ((uint32_t)limit & 0xFFF) << 20,
             4
         );
         if (status != OS_EOK) {
-            ERROR("__BcmWindows WriteDeviceIo register 0x%x failed: %u",
+            ERROR("__BcmWindows DeviceIoWrite register 0x%x failed: %u",
                 (unsigned)(BCM_OUTBOUND_BASE_LIMIT + index * 4), status);
             return status;
         }
@@ -946,8 +946,8 @@ BcmPciDestroy(
 
     // A failed calibration request must be cleared before releasing its registers.
     if (controller->RescalPendingClear) {
-        value = (uint32_t)ReadDeviceIo(&controller->RescalIo, 0, 4);
-        status = WriteDeviceIo(&controller->RescalIo, 0, value & ~1U, 4);
+        value = (uint32_t)DeviceIoRead(&controller->RescalIo, 0, 4);
+        status = DeviceIoWrite(&controller->RescalIo, 0, value & ~1U, 4);
         if (status != OS_EOK) {
             ERROR("BcmPciDestroy: segment %u failed to clear calibration register 0x0 (%u)",
                 controller->Firmware.Segment, status);

@@ -296,7 +296,7 @@ HubDeviceCreate(
     }
 
     // Allocate a ringbuffer for use
-    if (dma_pool_allocate(UsbRetrievePool(), 0x100, (void**)&hubDevice->Buffer) != OS_EOK) {
+    if (BufferPoolAllocate(UsbRetrievePool(), 0x100, (void**)&hubDevice->Buffer) != OS_EOK) {
         ERROR("HubDeviceCreate failed to allocate reusable buffer (interrupt-buffer)");
         goto error_exit;
     }
@@ -320,8 +320,8 @@ HubDeviceCreate(
             USBTRANSFER_TYPE_INTERRUPT,
             USBTRANSFER_DIRECTION_IN,
             0,
-            dma_pool_handle(UsbRetrievePool()),
-            dma_pool_offset(UsbRetrievePool(), hubDevice->Buffer),
+            BufferPoolHandle(UsbRetrievePool()),
+            BufferPoolOffset(UsbRetrievePool(), hubDevice->Buffer),
             0x100
     );
 
@@ -357,7 +357,7 @@ HubDeviceDestroy(
     __UnsubscribeToController(hubDevice->Base->DeviceContext.controller_driver_id);
 
     if (hubDevice->Buffer != NULL) {
-        dma_pool_free(UsbRetrievePool(), hubDevice->Buffer);
+        BufferPoolFree(UsbRetrievePool(), hubDevice->Buffer);
     }
     free(hubDevice->Base);
     free(hubDevice);

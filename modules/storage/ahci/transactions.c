@@ -45,19 +45,19 @@ static struct __AhciCommandTableEntry {
     size_t       SectorAlignment;
     size_t       MaxSectors;
 } CommandTable[] = {
-    { __STORAGE_OPERATION_READ, 0, 2, AtaPIOReadExt, 1, 0xFFFF },
-    { __STORAGE_OPERATION_READ, 0, 1, AtaPIORead, 1, 0xFF },
-    { __STORAGE_OPERATION_READ, 0, 0, AtaPIORead, 1, 0xFF },
-    { __STORAGE_OPERATION_READ, 1, 2, AtaDMAReadExt, 1, 0xFFFF },
-    { __STORAGE_OPERATION_READ, 1, 1, AtaDMARead, 1, 0xFF },
-    { __STORAGE_OPERATION_READ, 1, 0, AtaDMARead, 1, 0xFF },
+    { STORAGE_OPERATION_READ, 0, 2, AtaPIOReadExt, 1, 0xFFFF },
+    { STORAGE_OPERATION_READ, 0, 1, AtaPIORead, 1, 0xFF },
+    { STORAGE_OPERATION_READ, 0, 0, AtaPIORead, 1, 0xFF },
+    { STORAGE_OPERATION_READ, 1, 2, AtaDMAReadExt, 1, 0xFFFF },
+    { STORAGE_OPERATION_READ, 1, 1, AtaDMARead, 1, 0xFF },
+    { STORAGE_OPERATION_READ, 1, 0, AtaDMARead, 1, 0xFF },
     
-    { __STORAGE_OPERATION_WRITE, 0, 2, AtaPIOWriteExt, 1, 0xFFFF },
-    { __STORAGE_OPERATION_WRITE, 0, 1, AtaPIOWrite, 1, 0xFF },
-    { __STORAGE_OPERATION_WRITE, 0, 0, AtaPIOWrite, 1, 0xFF },
-    { __STORAGE_OPERATION_WRITE, 1, 2, AtaDMAWriteExt, 1, 0xFFFF },
-    { __STORAGE_OPERATION_WRITE, 1, 1, AtaDMAWrite, 1, 0xFF },
-    { __STORAGE_OPERATION_WRITE, 1, 0, AtaDMAWrite, 1, 0xFF },
+    { STORAGE_OPERATION_WRITE, 0, 2, AtaPIOWriteExt, 1, 0xFFFF },
+    { STORAGE_OPERATION_WRITE, 0, 1, AtaPIOWrite, 1, 0xFF },
+    { STORAGE_OPERATION_WRITE, 0, 0, AtaPIOWrite, 1, 0xFF },
+    { STORAGE_OPERATION_WRITE, 1, 2, AtaDMAWriteExt, 1, 0xFFFF },
+    { STORAGE_OPERATION_WRITE, 1, 1, AtaDMAWrite, 1, 0xFF },
+    { STORAGE_OPERATION_WRITE, 1, 0, AtaDMAWrite, 1, 0xFF },
     { -1, -1, -1, 0, 0, 0 }
 };
 
@@ -188,7 +188,7 @@ __CreateTransaction(
     transaction->Target.Type = device->Type;
     transaction->Target.SectorSize = device->SectorSize;
     transaction->Target.AddressingMode = device->AddressingMode;
-    transaction->Direction = direction == __STORAGE_OPERATION_READ ? AHCI_XACTION_IN : AHCI_XACTION_OUT;
+    transaction->Direction = direction == STORAGE_OPERATION_READ ? AHCI_XACTION_IN : AHCI_XACTION_OUT;
     
     if (message != NULL) {
         gracht_server_defer_message(message, &transaction->DeferredMessage[0]);
@@ -341,7 +341,7 @@ AhciTransactionStorageCreate(
         &buffer,
         bufferOffset,
         length,
-        direction == __STORAGE_OPERATION_READ ? DMAFromDevice : DMAToDevice,
+        direction == STORAGE_OPERATION_READ ? DMAFromDevice : DMAToDevice,
         &requirements,
         &transaction->Dma.Mapping
     );
@@ -410,7 +410,7 @@ ctt_storage_transfer_invocation(
         device,
         message,
         direction == SYS_TRANSFER_DIRECTION_READ ?
-            __STORAGE_OPERATION_READ : __STORAGE_OPERATION_WRITE,
+            STORAGE_OPERATION_READ : STORAGE_OPERATION_WRITE,
         sector.QuadPart,
         attachment.ID,
         offset,

@@ -323,7 +323,7 @@ __ParseRamdisk(
     oserr_t                        oserr;
     TRACE("__ParseRamdisk(buffer=0x%llx, size=%llu)", ramdiskBuffer, ramdiskSize);
 
-    DdkInitrdConfigureVafsReader(&configuration);
+    InitrdConfigureVafsReader(&configuration);
     status = vafs_reader_open_memory(ramdiskBuffer, ramdiskSize, &configuration, &g_vafs);
     if (status) {
         ERROR("__ParseRamdisk failed to open vafs image: %i", errno);
@@ -382,7 +382,7 @@ PSBootstrap(
     );
 
     // Let's map in the ramdisk and discover various service modules
-    oserr = DdkUtilsMapRamdisk(&ramdisk, &ramdiskSize);
+    oserr = InitrdMap(&ramdisk, &ramdiskSize);
     if (oserr != OS_EOK) {
         TRACE("ProcessBootstrap failed to map ramdisk into address space %u", oserr);
         return;

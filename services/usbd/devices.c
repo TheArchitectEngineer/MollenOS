@@ -170,7 +170,7 @@ __LoadDeviceDriver(
     coreDevice.Base.Identification.Product      = device->Product == NULL ? NULL : mstr_u8(device->Product);
     coreDevice.Base.Identification.Serial       = device->Serial == NULL ? NULL : mstr_u8(device->Serial);
 
-    device->DeviceId = RegisterDevice(&coreDevice.Base, DEVICE_REGISTER_FLAG_LOADDRIVER);
+    device->DeviceId = DeviceRegister(&coreDevice.Base, DEVICE_REGISTER_FLAG_LOADDRIVER);
 
     // Free the UTF-8 strings created for device registration.
     free(coreDevice.Base.Identification.Manufacturer);
@@ -558,7 +558,7 @@ UsbCoreDevicesDestroy(
 
     // Unload the class driver while its USB context is still valid.
     if (device->DeviceId != UUID_INVALID) {
-        (void)UnregisterDevice(device->DeviceId);
+        (void)DeviceUnregister(device->DeviceId);
     }
 
     // Remove the device state from the controller before releasing its USB

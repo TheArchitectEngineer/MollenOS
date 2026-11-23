@@ -58,7 +58,7 @@ __AcquireIOSpace(
     oserr_t     status;
 
     // UHCI registers use the first port-based I/O space.
-    for (int i = 0; i < __DEVICEMANAGER_MAX_IOSPACES; i++) {
+    for (int i = 0; i < DEVICEMANAGER_MAX_IOSPACES; i++) {
         if (((BusDevice_t*)controller->Base.Device)->IoSpaces[i].Type == DeviceIoPortBased) {
             ioBase = &((BusDevice_t*)controller->Base.Device)->IoSpaces[i];
             break;
@@ -69,7 +69,7 @@ __AcquireIOSpace(
         return OS_ENOENT;
     }
 
-    status = AcquireDeviceIo(ioBase);
+    status = DeviceIoAcquire(ioBase);
     if (status == OS_EOK) {
         controller->Base.IoBase = ioBase;
     }
@@ -148,7 +148,7 @@ HCIControllerCreate(
         controller->Base.Device->Id,
         OSIOCTLREQUEST_BUS_CONTROL,
         &(struct OSIOCtlBusControl) {
-            .Flags = (__DEVICEMANAGER_IOCTL_IO_ENABLE)
+            .Flags = (DEVICEMANAGER_IOCTL_IO_ENABLE)
         }, sizeof(struct OSIOCtlBusControl)
     );
     if (oserr != OS_EOK) {
@@ -159,9 +159,9 @@ HCIControllerCreate(
 
     // Switch from BIOS control to the driver and enable PCI interrupts.
     ioctlValue = 0x2000;
-    oserr = IoctlDeviceEx(
+    oserr = DeviceIoctlEx(
         controller->Base.Device->Id,
-        __DEVICEMANAGER_IOCTL_EXT_WRITE,
+        DEVICEMANAGER_IOCTL_EXT_WRITE,
         UHCI_USBLEGEACY,
         &ioctlValue,
         2
@@ -173,9 +173,9 @@ HCIControllerCreate(
     // Clear the Intel-specific register on Intel controllers.
     if (controller->Base.Device->VendorId == 0x8086) {
         ioctlValue = 0x00;
-        oserr = IoctlDeviceEx(
+        oserr = DeviceIoctlEx(
             controller->Base.Device->Id,
-            __DEVICEMANAGER_IOCTL_EXT_WRITE,
+            DEVICEMANAGER_IOCTL_EXT_WRITE,
             UHCI_USBRES_INTEL,
             &ioctlValue,
             1
@@ -237,7 +237,7 @@ HCIControllerDestroy(
     }
 
     if (base->IoBase != NULL) {
-        status = ReleaseDeviceIo(base->IoBase);
+        status = DeviceIoRelease(base->IoBase);
         if (status != OS_EOK) {
             goto retry;
         }
@@ -381,8 +381,8 @@ UhciSetup(
         controller->Base.Device->Id,
         OSIOCTLREQUEST_BUS_CONTROL,
         &(struct OSIOCtlBusControl) {
-            .Flags = __DEVICEMANAGER_IOCTL_ENABLE | __DEVICEMANAGER_IOCTL_IO_ENABLE |
-                     __DEVICEMANAGER_IOCTL_BUSMASTER_ENABLE
+            .Flags = DEVICEMANAGER_IOCTL_ENABLE | DEVICEMANAGER_IOCTL_IO_ENABLE |
+                     DEVICEMANAGER_IOCTL_BUSMASTER_ENABLE
         },
         sizeof(struct OSIOCtlBusControl)
     );

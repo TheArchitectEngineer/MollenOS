@@ -266,12 +266,12 @@ MSDDeviceCreate(
     }
 
     // Allocate reusable buffers
-    if (dma_pool_allocate(UsbRetrievePool(), sizeof(MsdCommandBlock_t), 
+    if (BufferPoolAllocate(UsbRetrievePool(), sizeof(MsdCommandBlock_t), 
         (void**)&msdDevice->CommandBlock) != OS_EOK) {
         ERROR("Failed to allocate reusable buffer (command-block)");
         goto Error;
     }
-    if (dma_pool_allocate(UsbRetrievePool(), sizeof(MsdCommandStatus_t), 
+    if (BufferPoolAllocate(UsbRetrievePool(), sizeof(MsdCommandStatus_t), 
         (void**)&msdDevice->StatusBlock) != OS_EOK) {
         ERROR("Failed to allocate reusable buffer (status-block)");
         goto Error;
@@ -321,10 +321,10 @@ MSDDeviceDestroy(
 
     // Free reusable buffers
     if (msdDevice->CommandBlock != NULL) {
-        dma_pool_free(UsbRetrievePool(), (void*)msdDevice->CommandBlock);
+        BufferPoolFree(UsbRetrievePool(), (void*)msdDevice->CommandBlock);
     }
     if (msdDevice->StatusBlock != NULL) {
-        dma_pool_free(UsbRetrievePool(), (void*)msdDevice->StatusBlock);
+        BufferPoolFree(UsbRetrievePool(), (void*)msdDevice->StatusBlock);
     }
 
     // Free data allocated

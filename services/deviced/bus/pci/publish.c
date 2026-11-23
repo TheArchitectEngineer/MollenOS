@@ -49,7 +49,7 @@ __PciAddIdeChannelPorts(
     // Use fixed legacy addresses only where the controller reported no BAR.
     if (spaces[0].Type == DeviceIoInvalid) {
         memset(&io, 0, sizeof(io));
-        status = CreateDevicePortIo(&io, base, 8);
+        status = DeviceIoCreatePort(&io, base, 8);
         if (status != OS_EOK) {
             ERROR("__PciAddIdeChannelPorts: failed to create data ports at 0x%x (%u)",
                 (unsigned)base, status);
@@ -61,7 +61,7 @@ __PciAddIdeChannelPorts(
     // Some controllers report one of the two entries but omit the other.
     if (spaces[1].Type == DeviceIoInvalid) {
         memset(&io, 0, sizeof(io));
-        status = CreateDevicePortIo(&io, control, 4);
+        status = DeviceIoCreatePort(&io, control, 4);
         if (status != OS_EOK) {
             ERROR("__PciAddIdeChannelPorts: failed to create control ports at 0x%x (%u)",
                 (unsigned)control, status);

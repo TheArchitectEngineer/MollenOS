@@ -55,7 +55,7 @@ __EcamRead(
     _In_ size_t       reg,
     _In_ size_t       width)
 {
-    return ReadDeviceIo(
+    return DeviceIoRead(
         &host->IoSpace,
         __EcamOffset(host, bus, slot, function, reg),
         width
@@ -74,7 +74,7 @@ __EcamWrite(
 {
     oserr_t status;
 
-    status = WriteDeviceIo(
+    status = DeviceIoWrite(
         &host->IoSpace,
         __EcamOffset(host, bus, slot, function, reg),
         value,
@@ -199,7 +199,7 @@ PciEcamHostCreate(
         return OS_EOOM;
     }
 
-    status = CreateDeviceMemoryIo(&host->IoSpace, (uintptr_t)base, length);
+    status = DeviceIoCreateMemory(&host->IoSpace, (uintptr_t)base, length);
     if (status != OS_EOK) {
         ERROR("PciEcamHostCreate: segment %u ECAM base 0x%llx length 0x%llx I/O creation failed (%u)",
             configuration->Identification.Segment,
@@ -210,7 +210,7 @@ PciEcamHostCreate(
         return status;
     }
 
-    status = AcquireDeviceIo(&host->IoSpace);
+    status = DeviceIoAcquire(&host->IoSpace);
     if (status != OS_EOK) {
         ERROR("PciEcamHostCreate: segment %u ECAM base 0x%llx length 0x%llx I/O acquisition failed (%u)",
             configuration->Identification.Segment,

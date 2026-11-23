@@ -58,9 +58,9 @@ __ReadPciConfig(
     _Out_ size_t*               valueOut)
 {
     *valueOut = 0;
-    return IoctlDeviceEx(
+    return DeviceIoctlEx(
         transport->Device->Base.Id,
-        __DEVICEMANAGER_IOCTL_EXT_READ,
+        DEVICEMANAGER_IOCTL_EXT_READ,
         offset,
         valueOut,
         width
@@ -90,10 +90,10 @@ VirtioPciRegionRead(
         case 1:
         case 2:
         case 4:
-            *valueOut = ReadDeviceIo(region->IoSpace, absoluteOffset, width);
+            *valueOut = DeviceIoRead(region->IoSpace, absoluteOffset, width);
             break;
         case 8:
-            *valueOut = __ReadDeviceIoLowHigh64(region->IoSpace, absoluteOffset);
+            *valueOut = DeviceIoReadLowHigh64(region->IoSpace, absoluteOffset);
             break;
         default:
             return OS_EINVALPARAMS;
@@ -126,10 +126,10 @@ VirtioPciRegionWrite(
         case 1:
         case 2:
         case 4:
-            oserr = WriteDeviceIo(region->IoSpace, absoluteOffset, (size_t)value, width);
+            oserr = DeviceIoWrite(region->IoSpace, absoluteOffset, (size_t)value, width);
             break;
         case 8:
-            oserr = __WriteDeviceIoLowHigh64(region->IoSpace, absoluteOffset, value);
+            oserr = DeviceIoWriteLowHigh64(region->IoSpace, absoluteOffset, value);
             break;
         default:
             return OS_EINVALPARAMS;
@@ -163,7 +163,7 @@ __ReadCapabilityRegion(
     }
     
     bar = (uint8_t)value;
-    if (bar >= __DEVICEMANAGER_MAX_IOSPACES) {
+    if (bar >= DEVICEMANAGER_MAX_IOSPACES) {
         ERROR("Capability at offset 0x%02X references invalid BAR %u",
               capabilityOffset, bar);
         return OS_EUNKNOWN;
@@ -439,7 +439,7 @@ __AcquireCapabilityBars(
 
         bar = (int)(ioSpace - &transport->Device->IoSpaces[0]);
         if (!(transport->AcquiredBars & (1U << bar))) {
-            oserr_t oserr = AcquireDeviceIo(ioSpace);
+            oserr_t oserr = DeviceIoAcquire(ioSpace);
             if (oserr != OS_EOK) {
                 return oserr;
             }
@@ -595,15 +595,15 @@ VirtioPciTransportInitialize(
         goto error;
     }
 
-    for (int bar = 0; bar < __DEVICEMANAGER_MAX_IOSPACES; bar++) {
+    for (int bar = 0; bar < DEVICEMANAGER_MAX_IOSPACES; bar++) {
         if (!(transport->AcquiredBars & (1U << bar))) {
             continue;
         }
 
         if (device->IoSpaces[bar].Type == DeviceIoMemoryBased) {
-            controlFlags |= __DEVICEMANAGER_IOCTL_MMIO_ENABLE;
+            controlFlags |= DEVICEMANAGER_IOCTL_MMIO_ENABLE;
         } else if (device->IoSpaces[bar].Type == DeviceIoPortBased) {
-            controlFlags |= __DEVICEMANAGER_IOCTL_IO_ENABLE;
+            controlFlags |= DEVICEMANAGER_IOCTL_IO_ENABLE;
         }
     }
 
@@ -634,8 +634,8 @@ VirtioPciTransportInitialize(
         device->Base.Id,
         OSIOCTLREQUEST_BUS_CONTROL,
         &(struct OSIOCtlBusControl) {
-            .Flags = controlFlags | __DEVICEMANAGER_IOCTL_ENABLE |
-                     __DEVICEMANAGER_IOCTL_BUSMASTER_ENABLE
+            .Flags = controlFlags | DEVICEMANAGER_IOCTL_ENABLE |
+                     DEVICEMANAGER_IOCTL_BUSMASTER_ENABLE
         },
         sizeof(struct OSIOCtlBusControl)
     );
@@ -677,9 +677,9 @@ VirtioPciTransportDestroy(
         return status;
     }
 
-    for (int bar = 0; bar < __DEVICEMANAGER_MAX_IOSPACES; bar++) {
+    for (int bar = 0; bar < DEVICEMANAGER_MAX_IOSPACES; bar++) {
         if (transport->AcquiredBars & (1U << bar)) {
-            status = ReleaseDeviceIo(&transport->Device->IoSpaces[bar]);
+            status = DeviceIoRelease(&transport->Device->IoSpaces[bar]);
             if (status != OS_EOK) {
                 return status;
             }

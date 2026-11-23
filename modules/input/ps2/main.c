@@ -48,7 +48,7 @@ static struct usched_mtx g_registrationLock;
 uint8_t
 PS2ReadStatus(void)
 {
-    return (uint8_t)ReadDeviceIo(Ps2Controller->Command, PS2_REGISTER_STATUS, 1);
+    return (uint8_t)DeviceIoRead(Ps2Controller->Command, PS2_REGISTER_STATUS, 1);
 }
 
 oserr_t
@@ -91,7 +91,7 @@ PS2ReadData(
             return 0xFF;
         }
     }
-    return (uint8_t)ReadDeviceIo(Ps2Controller->Data, PS2_REGISTER_DATA, 1);
+    return (uint8_t)DeviceIoRead(Ps2Controller->Data, PS2_REGISTER_DATA, 1);
 }
 
 oserr_t
@@ -101,7 +101,7 @@ PS2WriteData(
     if (WaitForPs2StatusFlagsClear(PS2_STATUS_INPUT_FULL) != OS_EOK) {
         return OS_EUNKNOWN;
     }
-    WriteDeviceIo(Ps2Controller->Data, PS2_REGISTER_DATA, Value, 1);
+    DeviceIoWrite(Ps2Controller->Data, PS2_REGISTER_DATA, Value, 1);
     return OS_EOK;
 }
 
@@ -113,7 +113,7 @@ PS2SendCommand(
     if (WaitForPs2StatusFlagsClear(PS2_STATUS_INPUT_FULL) != OS_EOK) {
         ERROR(" > input buffer full flags never cleared");
     }
-    WriteDeviceIo(Ps2Controller->Command, PS2_REGISTER_COMMAND, Command, 1);
+    DeviceIoWrite(Ps2Controller->Command, PS2_REGISTER_COMMAND, Command, 1);
 }
 
 oserr_t
@@ -161,8 +161,8 @@ PS2Initialize(
     Ps2Controller->Device = (BusDevice_t*)device;
 
     // No problem, last thing is to acquire the io-spaces, and just return that as result
-    if (AcquireDeviceIo(&Ps2Controller->Device->IoSpaces[0]) != OS_EOK ||
-        AcquireDeviceIo(&Ps2Controller->Device->IoSpaces[1]) != OS_EOK) {
+    if (DeviceIoAcquire(&Ps2Controller->Device->IoSpaces[0]) != OS_EOK ||
+        DeviceIoAcquire(&Ps2Controller->Device->IoSpaces[1]) != OS_EOK) {
         ERROR(" > failed to acquire ps2 io spaces");
         return OS_EUNKNOWN;
     }
@@ -241,11 +241,11 @@ OnUnload(void)
 {
     // Destroy the io-spaces we created
     if (Ps2Controller->Command != NULL) {
-        ReleaseDeviceIo(Ps2Controller->Command);
+        DeviceIoRelease(Ps2Controller->Command);
     }
 
     if (Ps2Controller->Data != NULL) {
-        ReleaseDeviceIo(Ps2Controller->Data);
+        DeviceIoRelease(Ps2Controller->Data);
     }
     free(Ps2Controller);
 }
@@ -352,7 +352,7 @@ void ctt_driver_register_device_invocation(struct gracht_message* message, const
     // The module server runs each message in its own job, and a job lets the
     // others run while it sleeps or waits for a reply. PS2Initialize registers
     // each port device with deviced, and deviced sends that device back to us
-    // before RegisterDevice returns the device id. Without the lock, the port
+    // before DeviceRegister returns the device id. Without the lock, the port
     // registration would run while PS2Initialize still waits for that id, find
     // no port with a matching DeviceId and drop the device. The lock makes it
     // wait until PS2Initialize has stored the ids of both ports. It also keeps

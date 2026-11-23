@@ -302,7 +302,7 @@ HCIControllerCreate(
         goto error;
     }
     
-    status = AcquireDeviceIo(&controller->RegisterIo);
+    status = DeviceIoAcquire(&controller->RegisterIo);
     if (status != OS_EOK) {
         goto error;
     }
@@ -450,7 +450,7 @@ HCIControllerDestroy(
     }
     
     if (baseController->IoBase != NULL) {
-        status = ReleaseDeviceIo(baseController->IoBase);
+        status = DeviceIoRelease(baseController->IoBase);
         if (status != OS_EOK) {
             WARNING("XHCI teardown: register detach failed (%u); retry pending", status);
             goto retry;

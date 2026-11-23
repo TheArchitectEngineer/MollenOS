@@ -95,14 +95,14 @@ __MsixDeviceMap(
         return status;
     }
 
-    status = MapDeviceIo(
+    status = DeviceIoMap(
         device->PublishedIo[region->Bar].Id,
         region->Offset,
         region->Length,
         mapping
     );
     if (status != OS_EOK) {
-        ERROR("__MsixDeviceMap: %u:%u:%u.%u MapDeviceIo failed for BAR%u "
+        ERROR("__MsixDeviceMap: %u:%u:%u.%u DeviceIoMap failed for BAR%u "
               "at 0x%x of %llu bytes (%u)",
             device->Host->Identification.Segment, device->Bus, device->Slot,
             device->Function, region->Bar, region->Offset,

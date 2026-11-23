@@ -220,7 +220,7 @@ __CreateRequest(
         &request->Data,
         bufferOffset,
         byteCount,
-        direction == __STORAGE_OPERATION_READ ? DMAFromDevice : DMAToDevice,
+        direction == STORAGE_OPERATION_READ ? DMAFromDevice : DMAToDevice,
         NULL,
         &request->Mapping
     );
@@ -336,7 +336,7 @@ __BuildIteration(
             buffers[dataDescriptorCount + 1].Address = address;
             buffers[dataDescriptorCount + 1].Length = (uint32_t)length;
             buffers[dataDescriptorCount + 1].Flags =
-                    request->Direction == __STORAGE_OPERATION_READ ?
+                    request->Direction == STORAGE_OPERATION_READ ?
                             VIRTIO_SPLIT_DESC_F_WRITE : 0;
             dataDescriptorCount++;
             candidateBytes += length;
@@ -372,7 +372,7 @@ __BuildIteration(
 
     request->IterationSectors = iterationBytes / device->Descriptor.SectorSize;
     header = DMABufferData(request->Metadata);
-    header->Type = request->Direction == __STORAGE_OPERATION_READ ?
+    header->Type = request->Direction == STORAGE_OPERATION_READ ?
             VIRTIO_BLK_T_IN : VIRTIO_BLK_T_OUT;
     header->Reserved = 0;
     
@@ -535,15 +535,15 @@ VirtioBlkDeviceTransfer(
         sector, sectorCount);
 
     if (device == NULL || message == NULL || sectorCount == 0 ||
-        (direction != __STORAGE_OPERATION_READ &&
-         direction != __STORAGE_OPERATION_WRITE) ||
+        (direction != STORAGE_OPERATION_READ &&
+         direction != STORAGE_OPERATION_WRITE) ||
         sector >= device->Descriptor.SectorCount ||
         sectorCount > device->Descriptor.SectorCount - sector ||
         sectorCount > SIZE_MAX / device->Descriptor.SectorSize) {
         return OS_EINVALPARAMS;
     }
     
-    if (direction == __STORAGE_OPERATION_WRITE &&
+    if (direction == STORAGE_OPERATION_WRITE &&
         (device->Descriptor.Flags & STORAGE_READONLY)) {
         return OS_ENOTSUPPORTED;
     }
@@ -622,7 +622,7 @@ VirtioBlkDeviceHandleInterrupt(
         iterationBytes = request->IterationSectors * device->Descriptor.SectorSize;
 
         // Reads write data and status. Writes only update the status byte.
-        if (request->Direction == __STORAGE_OPERATION_READ) {
+        if (request->Direction == STORAGE_OPERATION_READ) {
             expectedWritten = (uint32_t)(iterationBytes + sizeof(uint8_t));
         } else {
             expectedWritten = sizeof(uint8_t);

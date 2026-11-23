@@ -55,7 +55,7 @@ __StatDevice(
         return OS_EPROTOCOL;
     }
     if (osStatus == OS_EOK) {
-        from_sys_disk_descriptor_dkk(&gdescriptor, stats);
+        from_sys_disk_descriptor_ddk(&gdescriptor, stats);
     }
     return osStatus;
 }

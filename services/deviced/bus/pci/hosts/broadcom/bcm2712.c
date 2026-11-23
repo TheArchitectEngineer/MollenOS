@@ -347,7 +347,7 @@ __Bcm2712BridgeReset(
 
     // SET and CLEAR act on bits written as one. Write only this host's bit:
     // reading and rewriting a bank could accidentally reset another live host.
-    status = WriteDeviceIo(
+    status = DeviceIoWrite(
         &controller->BridgeReset->Io,
         bank + (assert ? BCM2712_RESET_SET : BCM2712_RESET_CLEAR),
         bit,
@@ -363,7 +363,7 @@ __Bcm2712BridgeReset(
     for (unsigned int attempt = 0; attempt < BCM2712_REGISTER_POLL_ATTEMPTS; attempt++) {
         // Reading STATUS waits for the earlier write to reach the controller
         // and reports whether reset is active. SET/CLEAR cannot report that state.
-        value = (uint32_t)ReadDeviceIo(&controller->BridgeReset->Io,
+        value = (uint32_t)DeviceIoRead(&controller->BridgeReset->Io,
                 bank + BCM2712_RESET_STATUS, sizeof(uint32_t));
 
         // An all-ones read can mean the access failed. Require a valid read
@@ -399,31 +399,31 @@ __Bcm2712MdioWrite(
 
     // Select PHY port zero, the requested register, and the write command.
     // Port zero and write both encode as zero in the address/control word.
-    status = WriteDeviceIo(
+    status = DeviceIoWrite(
         &bus->IoSpace,
         BCM2712_MDIO_ADDRESS,
         BCM2712_MDIO_PORT0 | BCM2712_MDIO_COMMAND_WRITE | reg,
         sizeof(uint32_t)
     );
     if (status != OS_EOK) {
-        ERROR("__Bcm2712MdioWrite WriteDeviceIo register 0x%x failed: %u",
+        ERROR("__Bcm2712MdioWrite DeviceIoWrite register 0x%x failed: %u",
             (unsigned)(BCM2712_MDIO_ADDRESS), status);
         return status;
     }
 
     // Read back the selection so it reaches the controller before write data
     // starts the transfer. The returned selection is not completion status.
-    (void)ReadDeviceIo(&bus->IoSpace, BCM2712_MDIO_ADDRESS, sizeof(uint32_t));
+    (void)DeviceIoRead(&bus->IoSpace, BCM2712_MDIO_ADDRESS, sizeof(uint32_t));
 
     // Bit 31 starts the transfer. The lower value is the complete PHY setting.
-    status = WriteDeviceIo(
+    status = DeviceIoWrite(
         &bus->IoSpace,
         BCM2712_MDIO_WRITE,
         BCM2712_MDIO_BUSY | value,
         sizeof(uint32_t)
     );
     if (status != OS_EOK) {
-        ERROR("__Bcm2712MdioWrite WriteDeviceIo register 0x%x failed: %u",
+        ERROR("__Bcm2712MdioWrite DeviceIoWrite register 0x%x failed: %u",
             (unsigned)(BCM2712_MDIO_WRITE), status);
         return status;
     }
@@ -431,7 +431,7 @@ __Bcm2712MdioWrite(
     for (unsigned int attempt = 0; attempt < BCM2712_REGISTER_POLL_ATTEMPTS; attempt++) {
         // Hardware clears BUSY after accepting the value. An all-ones read
         // keeps BUSY set, so a missing controller cannot look like a successful write.
-        if (!(ReadDeviceIo(&bus->IoSpace, BCM2712_MDIO_WRITE, sizeof(uint32_t)) &
+        if (!(DeviceIoRead(&bus->IoSpace, BCM2712_MDIO_WRITE, sizeof(uint32_t)) &
                 BCM2712_MDIO_BUSY)) {
             return OS_EOK;
         }
@@ -518,42 +518,42 @@ __Bcm2712Setup(
 
     // Return all ones on a failed read: the generic scanner recognizes an
     // all-ones vendor ID as an absent device and continues scanning.
-    status = WriteDeviceIo(
+    status = DeviceIoWrite(
         &bus->IoSpace,
         BCM2712_READ_ERROR,
         BCM2712_READ_ERROR_VALUE,
         sizeof(uint32_t)
     );
     if (status != OS_EOK) {
-        ERROR("__Bcm2712Setup WriteDeviceIo register 0x%x failed: %u",
+        ERROR("__Bcm2712Setup DeviceIoWrite register 0x%x failed: %u",
             (unsigned)(BCM2712_READ_ERROR), status);
         return status;
     }
 
     // Give a slow device roughly 250 ms before the system-bus request expires.
     // These ticks come from the controller clock, not the CPU clock.
-    status = WriteDeviceIo(
+    status = DeviceIoWrite(
         &bus->IoSpace,
         BCM2712_UBUS_TIMEOUT,
         BCM2712_UBUS_TIMEOUT_250MS,
         sizeof(uint32_t)
     );
     if (status != OS_EOK) {
-        ERROR("__Bcm2712Setup WriteDeviceIo register 0x%x failed: %u",
+        ERROR("__Bcm2712Setup DeviceIoWrite register 0x%x failed: %u",
             (unsigned)(BCM2712_UBUS_TIMEOUT), status);
         return status;
     }
 
     // A device may ask us to retry a configuration read while it is starting.
     // Stop retrying after about 240 ms, before the system-bus request times out.
-    status = WriteDeviceIo(
+    status = DeviceIoWrite(
         &bus->IoSpace,
         BCM2712_RETRY_TIMEOUT,
         BCM2712_RETRY_TIMEOUT_240MS,
         sizeof(uint32_t)
     );
     if (status != OS_EOK) {
-        ERROR("__Bcm2712Setup WriteDeviceIo register 0x%x failed: %u",
+        ERROR("__Bcm2712Setup DeviceIoWrite register 0x%x failed: %u",
             (unsigned)(BCM2712_RETRY_TIMEOUT), status);
         return status;
     }
@@ -589,7 +589,7 @@ __Bcm2712Setup(
 
     // Read back the timing-fix bit. Older chips and single-lane ports leave
     // it clear because they do not implement that correction.
-    value = (uint32_t)ReadDeviceIo(&bus->IoSpace, BCM2712_AXI_CONTROL, sizeof(uint32_t));
+    value = (uint32_t)DeviceIoRead(&bus->IoSpace, BCM2712_AXI_CONTROL, sizeof(uint32_t));
     if (!(value & BCM2712_AXI_PRIORITY_TIMING_FIX)) {
         // On those ports, limiting requests awaiting memory replies to 15
         // reduces the incorrect priority assignments that the missing fix avoids.
@@ -736,7 +736,7 @@ __Bcm2712Prepare(
 
     // Verify that this is the CPU-side root port. An all-ones failed read
     // would also have the root bit set, so reject it explicitly before setup.
-    value = (uint32_t)ReadDeviceIo(
+    value = (uint32_t)DeviceIoRead(
         &bus->IoSpace,
         BCM_PCIE_LINK_STATUS,
         sizeof(uint32_t)
@@ -804,28 +804,28 @@ __Bcm2712Inbound(
 
         // A zero size code disables this address mapping. Clear unused slots
         // too, so no extra address ranges remain accessible from firmware setup.
-        status = WriteDeviceIo(
+        status = DeviceIoWrite(
             &bus->IoSpace,
             bar,
             BCM_PCIE_INBOUND_DISABLED,
             sizeof(uint32_t)
         );
         if (status != OS_EOK) {
-            ERROR("__Bcm2712Inbound WriteDeviceIo register 0x%x failed: %u",
+            ERROR("__Bcm2712Inbound DeviceIoWrite register 0x%x failed: %u",
                 (unsigned)(bar), status);
             return status;
         }
 
         // Also disable access to the CPU physical destination. Old upper
         // address bits cannot grant access while both enable settings are off.
-        status = WriteDeviceIo(
+        status = DeviceIoWrite(
             &bus->IoSpace,
             remap,
             BCM_PCIE_DISABLED,
             sizeof(uint32_t)
         );
         if (status != OS_EOK) {
-            ERROR("__Bcm2712Inbound WriteDeviceIo register 0x%x failed: %u",
+            ERROR("__Bcm2712Inbound DeviceIoWrite register 0x%x failed: %u",
                 (unsigned)(remap), status);
             return status;
         }
@@ -834,14 +834,14 @@ __Bcm2712Inbound(
     // Disable the older, separate message-signaled interrupt (MSI) destination.
     // Pi 5 sends interrupts by writing to its MIP controller through one of the
     // ordinary device-to-system address mappings installed below.
-    status = WriteDeviceIo(
+    status = DeviceIoWrite(
         &bus->IoSpace,
         BCM_PCIE_MSI_BAR,
         BCM_PCIE_MSI_DISABLED,
         sizeof(uint32_t)
     );
     if (status != OS_EOK) {
-        ERROR("__Bcm2712Inbound WriteDeviceIo register 0x%x failed: %u",
+        ERROR("__Bcm2712Inbound DeviceIoWrite register 0x%x failed: %u",
             (unsigned)(BCM_PCIE_MSI_BAR), status);
         return status;
     }
@@ -866,42 +866,42 @@ __Bcm2712Inbound(
 
         // Install the upper PCI address half while this slot is still disabled.
         // Dropping this half would redirect high addresses into the low 4 GiB.
-        status = WriteDeviceIo(
+        status = DeviceIoWrite(
             &bus->IoSpace,
             bar + BCM_PCIE_REGISTER_HIGH_OFFSET,
             window->BusBase >> BCM_PCIE_ADDRESS_HIGH_SHIFT,
             sizeof(uint32_t)
         );
         if (status != OS_EOK) {
-            ERROR("__Bcm2712Inbound WriteDeviceIo register 0x%x failed: %u",
+            ERROR("__Bcm2712Inbound DeviceIoWrite register 0x%x failed: %u",
                 (unsigned)(bar + BCM_PCIE_REGISTER_HIGH_OFFSET), status);
             return status;
         }
 
         // The CPU physical address has its own upper half. It may differ
         // from the PCI address the device uses for the same mapping.
-        status = WriteDeviceIo(
+        status = DeviceIoWrite(
             &bus->IoSpace,
             remap + BCM_PCIE_REGISTER_HIGH_OFFSET,
             window->PhysicalBase >> BCM_PCIE_ADDRESS_HIGH_SHIFT,
             sizeof(uint32_t)
         );
         if (status != OS_EOK) {
-            ERROR("__Bcm2712Inbound WriteDeviceIo register 0x%x failed: %u",
+            ERROR("__Bcm2712Inbound DeviceIoWrite register 0x%x failed: %u",
                 (unsigned)(remap + BCM_PCIE_REGISTER_HIGH_OFFSET), status);
             return status;
         }
 
         // Set the lower physical address and allow access to that destination.
         // Validation proved its low 12 address bits are zero, leaving bit 0 free.
-        status = WriteDeviceIo(
+        status = DeviceIoWrite(
             &bus->IoSpace,
             remap,
             (uint32_t)window->PhysicalBase | BCM2712_INBOUND_REMAP_ENABLE,
             sizeof(uint32_t)
         );
         if (status != OS_EOK) {
-            ERROR("__Bcm2712Inbound WriteDeviceIo register 0x%x failed: %u",
+            ERROR("__Bcm2712Inbound DeviceIoWrite register 0x%x failed: %u",
                 (unsigned)(remap), status);
             return status;
         }
@@ -909,14 +909,14 @@ __Bcm2712Inbound(
         // Enable the mapping last, after both halves of the destination address
         // are set. The starting address is a multiple of the range size, leaving
         // the lower bits free for the size code.
-        status = WriteDeviceIo(
+        status = DeviceIoWrite(
             &bus->IoSpace,
             bar,
             (uint32_t)window->BusBase | sizeCode,
             sizeof(uint32_t)
         );
         if (status != OS_EOK) {
-            ERROR("__Bcm2712Inbound WriteDeviceIo register 0x%x failed: %u",
+            ERROR("__Bcm2712Inbound DeviceIoWrite register 0x%x failed: %u",
                 (unsigned)(bar), status);
             return status;
         }
@@ -963,18 +963,18 @@ __Bcm2712Start(
 
         // Preserve other controls with a 16-bit read. The following word is
         // status and must not be included in the matching write.
-        linkControl = (uint16_t)ReadDeviceIo(&bus->IoSpace,
+        linkControl = (uint16_t)DeviceIoRead(&bus->IoSpace,
                 BCM_PCIE_LINK_CONTROL2, sizeof(uint16_t));
 
         // Request that same speed for the upcoming connection attempt.
-        status = WriteDeviceIo(
+        status = DeviceIoWrite(
             &bus->IoSpace,
             BCM_PCIE_LINK_CONTROL2,
             (linkControl & ~BCM_PCIE_LINK_CONTROL2_SPEED_MASK) | firmware->Link.MaxSpeed,
             sizeof(uint16_t)
         );
         if (status != OS_EOK) {
-            ERROR("__Bcm2712Start WriteDeviceIo register 0x%x failed: %u",
+            ERROR("__Bcm2712Start DeviceIoWrite register 0x%x failed: %u",
                 (unsigned)(BCM_PCIE_LINK_CONTROL2), status);
             return status;
         }
@@ -1062,19 +1062,19 @@ __Bcm2712Start(
 
     // Read the current 16-bit control word, preserving unrelated link controls
     // and avoiding the adjacent status word during the update below.
-    linkControl = (uint16_t)ReadDeviceIo(&bus->IoSpace,
+    linkControl = (uint16_t)DeviceIoRead(&bus->IoSpace,
             BCM_PCIE_LINK_CONTROL, sizeof(uint16_t));
 
     // Disable any L0s/L1 selection firmware left active. Removing advertised
     // support alone does not clear an already-selected power-saving mode.
-    status = WriteDeviceIo(
+    status = DeviceIoWrite(
         &bus->IoSpace,
         BCM_PCIE_LINK_CONTROL,
         linkControl & ~BCM_PCIE_LINK_CONTROL_ASPM_MASK,
         sizeof(uint16_t)
     );
     if (status != OS_EOK) {
-        ERROR("__Bcm2712Start WriteDeviceIo register 0x%x failed: %u",
+        ERROR("__Bcm2712Start DeviceIoWrite register 0x%x failed: %u",
             (unsigned)(BCM_PCIE_LINK_CONTROL), status);
         return status;
     }
