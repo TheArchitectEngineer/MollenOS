@@ -74,11 +74,13 @@ typedef struct AcpiDescriptor {
 /**
  * @brief Gets the ACPI version and boot information for this system.
  *
- * @param AcpiDescriptor Receives the system's ACPI information.
+ * @param descriptor Receives the system's ACPI information.
  * @return OS_EOK on success, OS_ENOTSUPPORTED if ACPI is unavailable, or an error
  *         from the firmware query.
  */
-DDKDECL(oserr_t, AcpiQueryStatus(AcpiDescriptor_t * AcpiDescriptor));
+DDKDECL(oserr_t,
+AcpiQueryStatus(
+    _In_ AcpiDescriptor_t* descriptor));
 
 /**
  * @brief Copies the ACPI table with the given signature into an allocated buffer.
@@ -88,7 +90,9 @@ DDKDECL(oserr_t, AcpiQueryStatus(AcpiDescriptor_t * AcpiDescriptor));
  * @param tableOut Receives the allocated table on success.
  * @return OS_EOK on success, or an error if the table cannot be read or allocated.
  */
-DDKDECL(oserr_t, AcpiQueryTable(const char*signature, ACPI_TABLE_HEADER **tableOut));
-
+DDKDECL(oserr_t,
+AcpiQueryTable(
+    _In_  const char*         signature,
+    _Out_ ACPI_TABLE_HEADER** tableOut));
 
 #endif //!__DDK_ACPI_H__

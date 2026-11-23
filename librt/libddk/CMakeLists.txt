@@ -46,39 +46,52 @@ add_library(libddk
     ${GENERATED_SOURCES}
     ${ASM_SOURCES}
 
+    device/clock.c
+    device/controller.c
+    device/device.c
+    device/ethernet.c
+    device/firmware_node.c
+    device/resources.c
+    device/supply.c
+
     dma/attachment.c
+    dma/buffer.c
     dma/chunk.c
     dma/context.c
-    dma/dma.c
-    dma/region.c
     dma/fence.c
+    dma/mapping.c
+    dma/region.c
+    dma/resource.c
 
-    initrd/depacks.c
+    firmware/acpi.c
+    firmware/firmware.c
+
     initrd/filter.c
+    initrd/ramdisk.c
 
     interrupts/bus.c
     interrupts/interrupt.c
     interrupts/pci.c
 
-    utils/bufferpool.c
-    utils/bytepool.c
-    utils/crc32.c
+    io/deviceio.c
+    io/volatile.c
 
-    debug.c
-    device.c
-    deviceio.c
-    storage.c
-    resources.c
-    controller.c
-    supply.c
-    clock.c
-    firmware_node.c
-    firmware.c
-    io.c
-    mappings.c
-    service.c
-    usb.c
-    utils.c
+    services/service.c
+    services/storage.c
+    services/usb.c
+
+    system/capabilities.c
+    system/debug.c
+    system/log.c
+    system/memory.c
+    system/video.c
+
+    # Code from other projects, kept as it was written.
+    third_party/aplib/depacks.c
+    third_party/bget/bytepool.c
+
+    utils/bufferpool.c
+    utils/crc32.c
 )
 add_dependencies(libddk service_clients contract_clients)
 target_include_directories(libddk

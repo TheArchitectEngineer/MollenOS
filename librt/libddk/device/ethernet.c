@@ -16,52 +16,13 @@
  * You should have received a copy of the GNU General Public License
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  *
+ * Wrappers for OSIOCTLREQUEST_ETHERNET_CONFIG and OSIOCTLREQUEST_ETHERNET_PHY_RESET.
+ * An ethernet driver reads the PHY setup that firmware describes, and asks
+ * the bus of its device to reset the PHY.
  */
 
-#include <ddk/resources.h>
 #include <ddk/ethernet.h>
 #include <os/device.h>
-
-oserr_t
-DeviceGetResources(
-    _In_  uuid_t                  device,
-    _Out_ struct DeviceResources* resources)
-{
-    struct DeviceResources result = { 0 };
-    oserr_t                status;
-
-    if (resources == NULL) {
-        return OS_EINVALPARAMS;
-    }
-
-    // Query into temporary storage so a transport error or invalid reply does
-    // not replace the caller's existing resource description.
-    status = OSDeviceIOCtl(
-        device,
-        OSIOCTLREQUEST_DEVICE_RESOURCES,
-        &result,
-        sizeof(result)
-    );
-    if (status != OS_EOK) {
-        return status;
-    }
-    
-    // The returned count must fit the fixed array before a driver uses it.
-    if (result.Count > DEVICE_MAX_REGISTERS) {
-        return OS_EPROTOCOL;
-    }
-    
-    *resources = result;
-    return OS_EOK;
-}
-
-oserr_t
-DeviceActivate(
-    _In_ uuid_t                device,
-    _In_ enum DeviceActivation stage)
-{
-    return OSDeviceIOCtl(device, OSIOCTLREQUEST_DEVICE_ACTIVATE, &stage, sizeof(stage));
-}
 
 oserr_t
 DeviceGetEthernetConfiguration(
@@ -77,7 +38,12 @@ DeviceGetEthernetConfiguration(
 
     // Firmware configuration can be queried before preparing the hardware.
     // Keep the result local until both the request and reply checks succeed.
-    status = OSDeviceIOCtl(device, OSIOCTLREQUEST_ETHERNET_CONFIG, &result, sizeof(result));
+    status = OSDeviceIOCtl(
+        device,
+        OSIOCTLREQUEST_ETHERNET_CONFIG,
+        &result,
+        sizeof(struct DeviceEthernetConfiguration)
+    );
     if (status != OS_EOK) {
         return status;
     }
@@ -101,5 +67,10 @@ DeviceResetEthernetPhy(
     // GPIO selection and pulse timing come from the validated firmware data.
     uint32_t reserved = 0;
 
-    return OSDeviceIOCtl(device, OSIOCTLREQUEST_ETHERNET_PHY_RESET, &reserved, sizeof(reserved));
+    return OSDeviceIOCtl(
+        device,
+        OSIOCTLREQUEST_ETHERNET_PHY_RESET,
+        &reserved,
+        sizeof(uint32_t)
+    );
 }

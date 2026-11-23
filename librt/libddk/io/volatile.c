@@ -16,10 +16,8 @@
  * You should have received a copy of the GNU General Public License
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  *
- *
- * I/O Definitions & Structures
- * - This header describes the base io-structure, prototypes
- *   and functionality, refer to the individual things for descriptions
+ * Reads and writes of device memory that the compiler must not reorder, split
+ * or merge. The kernel builds this file as well.
  */
 
 #include <ddk/io.h>

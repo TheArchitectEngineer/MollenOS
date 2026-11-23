@@ -1,7 +1,5 @@
 /**
- * MollenOS
- *
- * Copyright 2020, Philip Meulengracht
+ * Copyright 2023, Philip Meulengracht
  *
  * This program is free software : you can redistribute it and / or modify
  * it under the terms of the GNU General Public License as published by
@@ -16,24 +14,19 @@
  * You should have received a copy of the GNU General Public License
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  *
- *
- * Debug Definitions & Structures
- * - This header describes debug structure, prototypes
- *   and functionality, refer to the individual things for descriptions
+ * Maps the boot ramdisk (initrd) into the memory space of the caller.
  */
 
-#include <ddk/debug.h>
 #include <internal/_syscalls.h>
+#include <ddk/utils.h>
 
-oserr_t MapThreadMemoryRegion(
-        _In_  uuid_t    threadHandle,
-        _In_  uintptr_t address,
-        _Out_ void**    topOfStack,
-        _Out_ void**    pointerOut)
+oserr_t
+DdkUtilsMapRamdisk(
+    _Out_ void**  bufferOut,
+    _Out_ size_t* bufferLengthOut)
 {
-    if (!pointerOut || !topOfStack) {
+    if (!bufferOut || !bufferLengthOut) {
         return OS_EINVALPARAMS;
     }
-
-    return Syscall_MapThreadMemoryRegion(threadHandle, address, topOfStack, pointerOut);
+    return Syscall_MapRamdisk(bufferOut, bufferLengthOut);
 }

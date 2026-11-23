@@ -53,12 +53,12 @@ _CODE_BEGIN
 
 /**
  * @brief Queries the information about the boot video environment.
- * @param Descriptor A pointer to a structure to store information.
- * @return
+ * @param descriptor Receives the boot video mode on success.
+ * @return OS_EOK on success, or an error from the kernel.
  */
 DDKDECL(oserr_t,
 QueryBootVideoInformation(
-        _In_ OSBootVideoDescriptor_t* Descriptor));
+    _In_ OSBootVideoDescriptor_t* descriptor));
 
 /* CreateDisplayFramebuffer
  * Creates a new display framebuffer to use for direct drawing. */

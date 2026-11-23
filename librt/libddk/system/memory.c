@@ -15,10 +15,8 @@
  * You should have received a copy of the GNU General Public License
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  *
- *
- * MollenOS MCore - Memory Support Definitions & Structures
- * - This header describes the base memory-structures, prototypes
- *   and functionality, refer to the individual things for descriptions
+ * Memory spaces. A service like the process manager uses these calls to create
+ * the address space of a new process and to map memory into it.
  */
 
 #include <os/types/syscall.h>

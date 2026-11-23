@@ -52,6 +52,30 @@ struct DMARegionSession {
     unsigned char                Initialized[];
 };
 
+oserr_t
+DMAMapSHMRegions(
+    _In_    struct DMAContext*               context,
+    _In_    const OSHandle_t*                buffer,
+    _In_    size_t                           offset,
+    _In_    size_t                           length,
+    _In_    enum DMADirection                direction,
+    _In_    const struct DMAMapRequirements* requirements,
+    _InOut_ struct DMAMapping**              mappingOut)
+{
+    // Region mappings always map the original SHM pages directly without a bounce
+    // buffer, and sync access per region session instead of mapping-wide.
+    return __DmaMapSHM(
+        context,
+        buffer,
+        offset,
+        length,
+        direction,
+        DMA_MAP_REQUIRE_DIRECT | DMA_MAP_REGIONS,
+        requirements,
+        mappingOut
+    );
+}
+
 // The kernel has already checked that this region fits inside the parent
 // mapping. Walk the parent mapping's cached device segments, skip up to
 // Kernel.Offset, and copy out the slice covering Kernel.Length. No syscall or

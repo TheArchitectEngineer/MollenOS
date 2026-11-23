@@ -14,15 +14,13 @@
  * You should have received a copy of the GNU General Public License
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  *
- * Firmware table interface (ACPI and DeviceTree)
+ * Access to the firmware tables of the system. A table is an ACPI table or
+ * the DeviceTree, and can be located, copied or mapped.
  */
 
 #include <internal/_syscalls.h>
-#include <ddk/acpi.h>
 #include <ddk/firmware.h>
 #include <os/memory.h>
-#include <stdlib.h>
-#include <string.h>
 
 oserr_t
 FirmwareQuery(
@@ -79,77 +77,4 @@ FirmwareTableUnmap(
         return OS_EINVALPARAMS;
     }
     return MemoryFree((void*)mapping, length);
-}
-
-oserr_t
-AcpiQueryStatus(
-    _In_ AcpiDescriptor_t* AcpiDescriptor)
-{
-    OSFirmwareInfo_t info;
-    oserr_t          oserr;
-
-    if (AcpiDescriptor == NULL) {
-        return OS_EINVALPARAMS;
-    }
-
-    oserr = FirmwareQuery(&info);
-    if (oserr != OS_EOK) {
-        return oserr;
-    }
-    if (!(info.Available & OSFIRMWARE_ACPI)) {
-        return OS_ENOTSUPPORTED;
-    }
-
-    AcpiDescriptor->Version      = info.Acpi.Revision;
-    AcpiDescriptor->Century      = info.Acpi.Century;
-    AcpiDescriptor->BootFlags    = info.Acpi.IaBootFlags;
-    AcpiDescriptor->ArmBootFlags = info.Acpi.ArmBootFlags;
-    return OS_EOK;
-}
-
-oserr_t
-AcpiQueryTable(
-    _In_  const char*         signature,
-    _Out_ ACPI_TABLE_HEADER** tableOut)
-{
-    OSFirmwareTableKey_t key = { .Source = OSFIRMWARE_ACPI };
-    OSFirmwareTable_t    table;
-    void*                buffer;
-    size_t               length;
-    oserr_t              oserr;
-
-    if (signature == NULL || tableOut == NULL || strlen(signature) != sizeof(key.Signature)) {
-        return OS_EINVALPARAMS;
-    }
-    memcpy(&key.Signature[0], signature, sizeof(key.Signature));
-
-    oserr = FirmwareTableLocate(&key, &table);
-    if (oserr != OS_EOK) {
-        return oserr;
-    }
-
-    buffer = malloc(table.Length);
-    if (!buffer) {
-        return OS_EOOM;
-    }
-
-    oserr = FirmwareTableRead(&key, buffer, table.Length, &length);
-    if (oserr != OS_EOK) {
-        free(buffer);
-        return oserr;
-    }
-
-    *tableOut = buffer;
-    return OS_EOK;
-}
-
-oserr_t
-AcpiQueryPci(
-    _In_  const struct AcpiPciQuery* query,
-    _Out_ union AcpiPciResult*      result)
-{
-    if (query == NULL || result == NULL) {
-        return OS_EINVALPARAMS;
-    }
-    return Syscall_AcpiQueryPci(query, result);
 }

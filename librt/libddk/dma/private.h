@@ -21,6 +21,7 @@
 #include <ddk/dma.h>
 #include <os/types/shm.h>
 #include <os/types/dma_attachment.h>
+#include <os/types/syscall.h>
 #include <stdatomic.h>
 
 // A buffer or a mapping created from a context. Its device segment list is kept
@@ -109,7 +110,85 @@ struct DMAContext {
 };
 
 /**
+ * @brief Fills in a new buffer or mapping from the result of its creation
+ * syscall, and fetches the full segment list when there is more than one
+ * segment. Implemented in resource.c.
+ *
+ * On failure the kernel mapping is released again and the resource is freed.
+ * If that release fails as well, the resource is handed to __DmaDeferCleanup.
+ * The caller must not touch the resource after a failure.
+ *
+ * @param resource Zeroed resource at the start of a DMABuffer or DMAMapping.
+ *                 Storage must already be set for a buffer.
+ * @param context  Context the resource was created from.
+ * @param result   Handle and first segment returned by the kernel.
+ * @return OS_EOK on success, OS_EOVERFLOW or OS_EOOM when the segment list
+ *         cannot be allocated, or an error from the kernel.
+ */
+oserr_t
+__DmaPrepareResource(
+    _In_ struct __DmaResource*            resource,
+    _In_ struct DMAContext*               context,
+    _In_ const struct OSDmaMappingResult* result);
+
+/**
+ * @brief Releases the kernel mapping of a resource, detaches its SHM storage
+ * if it has one, and frees the resource. Implemented in resource.c.
+ *
+ * Each step is recorded once it has succeeded. When a step fails the resource
+ * is kept, and a second call continues with the step that failed.
+ *
+ * @param resource Resource at the start of a DMABuffer or DMAMapping.
+ * @return OS_EOK when the resource is freed, or the error of the failed step.
+ */
+oserr_t
+__DmaRelease(
+    _In_ struct __DmaResource* resource);
+
+/**
+ * @brief Returns the device segments of a resource. The list belongs to the
+ * resource and stays valid until the resource is released. Implemented in
+ * resource.c.
+ *
+ * @param resource Resource that __DmaPrepareResource has filled in.
+ * @param countOut Receives the number of segments.
+ * @return The first segment of the list.
+ */
+const struct DMASegment*
+__DmaSegments(
+    _In_  const struct __DmaResource* resource,
+    _Out_ uint32_t*                   countOut);
+
+/**
+ * @brief Shared implementation of every DMAMapSHM call. Implemented in
+ * mapping.c, and also used by DMAMapSHMRegions in region.c.
+ *
+ * @param context      Open context of the device.
+ * @param buffer       SHM buffer to map.
+ * @param offset       Byte offset of the range inside the buffer.
+ * @param length       Length of the range in bytes. Must not be zero.
+ * @param direction    Widest data direction the mapping allows.
+ * @param flags        DMA_MAP_* flags that select the kind of mapping.
+ * @param requirements Optional limits of the device, or NULL.
+ * @param mappingOut   Receives the mapping. Must point to NULL on entry.
+ * @return OS_EOK on success, OS_EINVALPARAMS for a bad argument, OS_EBUSY when
+ *         mappingOut is in use or the context is not open, or an error from
+ *         the kernel.
+ */
+oserr_t
+__DmaMapSHM(
+    _In_    struct DMAContext*               context,
+    _In_    const OSHandle_t*                buffer,
+    _In_    size_t                           offset,
+    _In_    size_t                           length,
+    _In_    enum DMADirection                direction,
+    _In_    unsigned int                     flags,
+    _In_    const struct DMAMapRequirements* requirements,
+    _InOut_ struct DMAMapping**              mappingOut);
+
+/**
  * @brief Saves a resource whose creation failed and whose cleanup failed too.
+ * Implemented in context.c, which holds the lock of the context registry.
  * DMAClose retries the cleanup later. Without this the kernel handle or the SHM
  * attachment would be lost.
  *
@@ -122,6 +201,7 @@ __DmaDeferCleanup(
 
 /**
  * @brief Retries the cleanup of every resource saved by __DmaDeferCleanup.
+ * Implemented in resource.c.
  * The context registry lock must be held.
  *
  * @param context Context to clean up. The caller must make sure nothing else is

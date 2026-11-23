@@ -87,13 +87,14 @@ _CODE_BEGIN
 /**
  * @brief Debug/trace printing for userspace application and drivers. Writes to the kernel log.
  *
- * @param[In] Type   Log type, see values SYSTEM_DEBUG_*
- * @param[In] Format Sprintf like format, with variadic parameters.
+ * @param level  Log level of the message, one of the OSSYSLOGLEVEL_* values.
+ * @param format printf-style format, followed by its arguments. The formatted
+ *               message is cut off after 254 characters.
  */
 DDKDECL(void,
 SystemDebug(
-        _In_ enum OSSysLogLevel Level,
-        _In_ const char*        Format, ...));
+    _In_ enum OSSysLogLevel level,
+    _In_ const char*        format, ...));
 
 /**
  * @brief Requests to have the boot ramdisk mapped into the current memory space and
@@ -104,9 +105,9 @@ SystemDebug(
  * @return     Status of the operation.
  */
 DDKDECL(oserr_t,
-        DdkUtilsMapRamdisk(
-        _Out_ void**  bufferOut,
-        _Out_ size_t* bufferLengthOut));
+DdkUtilsMapRamdisk(
+    _Out_ void**  bufferOut,
+    _Out_ size_t* bufferLengthOut));
 
 _CODE_END
 

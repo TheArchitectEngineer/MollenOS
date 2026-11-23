@@ -23,7 +23,8 @@
 #include <limits.h>
 #include <ddk/initrd.h>
 #include <vafs/reader.h>
-#include "depacks.h"
+
+#include "../third_party/aplib/depacks.h"
 
 static int __aplib_decode(
     _In_  const void* input,
