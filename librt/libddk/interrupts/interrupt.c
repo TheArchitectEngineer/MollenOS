@@ -20,7 +20,7 @@
 
 //#define __TRACE
 
-#include <ddk/types/interrupt-group.h>
+#include <os/types/interrupt_group.h>
 #include <ddk/types/interrupt-source.h>
 #include <ddk/devices/bus.h>
 #include <ddk/interrupts/interrupt.h>

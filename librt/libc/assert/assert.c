@@ -26,7 +26,7 @@ void _assert_panic(const char* str) {
 	DebugPanic(FATAL_SCOPE_KERNEL, &context, str);
 }
 #else
-#include <ddk/utils.h>
+#include <os/syslog.h>
 #include <stdlib.h>
 
 void _assert_panic(const char* str)

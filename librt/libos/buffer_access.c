@@ -18,7 +18,7 @@
 
 //#define __TRACE
 
-#include <ddk/utils.h>
+#include <os/syslog.h>
 #include <os/buffer_access.h>
 #include <assert.h>
 #include <stdatomic.h>

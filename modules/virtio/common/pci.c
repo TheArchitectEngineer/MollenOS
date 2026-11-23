@@ -24,7 +24,7 @@
 
 #define __TRACE
 #define __need_static_assert
-#include <ddk/barrier.h>
+#include <os/barrier.h>
 #include <ddk/io.h>
 #include <ddk/utils.h>
 #include <os/device.h>

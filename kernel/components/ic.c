@@ -23,7 +23,7 @@
 
 //#define __TRACE
 
-#include <ddk/types/interrupt-controller.h>
+#include <os/types/interrupt_controller.h>
 #include <assert.h>
 #include <arch/interrupts.h>
 #include <arch/utils.h>

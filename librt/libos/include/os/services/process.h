@@ -23,7 +23,7 @@
 #define __OS_SERVICES_PROCESS_H__
 
 #include <os/osdefs.h>
-#include <ddk/types/capabilities.h>
+#include <os/types/capabilities.h>
 #include <os/types/process.h>
 #include <time.h>
 

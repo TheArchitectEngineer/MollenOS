@@ -94,9 +94,14 @@ OSHandleRegisterProvider
 OSHandleImport
 OSHandleValidate
 OSHandleReadCleanup
-
-    SHMRegionsRegister
-    SHMRegionSessionOpen
-    SHMRegionTryBeginCpu
-    SHMRegionEndCpu
-    SHMRegionSessionClose
+SHMRegionsRegister
+SHMRegionSessionOpen
+SHMRegionTryBeginCpu
+SHMRegionEndCpu
+SHMRegionSessionClose
+ReadVolatileMemory
+WriteVolatileMemory
+OSMemorySpaceCreate
+OSMemorySpaceGetForThread
+OSMemorySpaceCreateMapping
+OSSysLogWrite

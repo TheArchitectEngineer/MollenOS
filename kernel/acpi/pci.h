@@ -20,7 +20,7 @@
 #define __KERNEL_ACPI_PCI_H__
 
 #include <acpiinterface.h>
-#include <ddk/pci/acpi.h>
+#include <os/types/acpi_pci.h>
 
 /**
  * @brief What the firmware tells us about DMA for one PCI root. Devices use DMA

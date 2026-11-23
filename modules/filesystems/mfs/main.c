@@ -15,6 +15,11 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
+// The trace lines of this file follow the file operations: mount, open,
+// create, close, unlink and move. The boot test runners under testing/ look
+// for some of them. FsReadEntry and FsWriteEntry log no trace line. On a
+// serial line one trace line takes longer than a small request itself, so a
+// line per request would slow every read and write down.
 #define __TRACE
 #define CACHE_SEGMENTED
 #define __need_minmax
@@ -616,8 +621,6 @@ __ReadEntry(
         _In_  size_t           unitCount,
         _Out_ size_t*          unitsRead)
 {
-    TRACE("FsReadEntry(flags 0x%x, length %u)", entry->Flags, unitCount);
-
     if (entry->Flags & FILE_FLAG_DIRECTORY) {
         return FsReadFromDirectory(mfs, entry, buffer, bufferOffset, unitCount, unitsRead);
     }
@@ -666,8 +669,6 @@ __WriteEntry(
         _In_  size_t           unitCount,
         _Out_ size_t*          unitsWritten)
 {
-    TRACE("FsWriteEntry(flags 0x%x, length %u)", entry->Flags, unitCount);
-
     if (!(entry->Flags & FILE_FLAG_DIRECTORY)) {
         return FsWriteToFile(mfs, entry, bufferHandle, buffer, bufferOffset, unitCount, unitsWritten);
     }

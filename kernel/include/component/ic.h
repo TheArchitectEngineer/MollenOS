@@ -22,8 +22,8 @@
 #ifndef __COMPONENT_INTERRUPT_CONTROLLER__
 #define __COMPONENT_INTERRUPT_CONTROLLER__
 
-#include <ddk/types/interrupt-controller.h>
-#include <ddk/types/interrupt.h>
+#include <os/types/interrupt_controller.h>
+#include <os/types/interrupt.h>
 #include <os/osdefs.h>
 #include <interrupts/types.h>
 

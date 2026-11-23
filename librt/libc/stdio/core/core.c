@@ -21,7 +21,8 @@
 #include <assert.h>
 #include <os/notification_queue.h>
 #include <os/handle.h>
-#include <ddk/utils.h>
+#include <os/syslog.h>
+#include <os/mollenos.h>
 #include <ds/hashtable.h>
 #include <errno.h>
 #include <internal/_io.h>

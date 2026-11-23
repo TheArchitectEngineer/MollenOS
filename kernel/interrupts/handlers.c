@@ -27,7 +27,7 @@
 #include <component/cpu.h>
 #include <component/timer.h>
 #include <debug.h>
-#include <ddk/barrier.h>
+#include <os/barrier.h>
 #include <heap.h>
 #include <interrupts/interrupts.h>
 #include <machine.h>

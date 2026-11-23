@@ -53,7 +53,7 @@ __DoStackTrace(
     mstring_t* moduleName;
     int        i = 0, max = 12;
 
-    oserr = MapThreadMemoryRegion(
+    oserr = DebugMapThreadMemory(
             threadHandle,
             stackAtCrash,
             &topOfStack,

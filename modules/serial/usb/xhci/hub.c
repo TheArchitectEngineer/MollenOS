@@ -17,7 +17,7 @@
 
 #define __TRACE
 
-#include <ddk/barrier.h>
+#include <os/barrier.h>
 #include <ddk/utils.h>
 #include <string.h>
 #include <threads.h>

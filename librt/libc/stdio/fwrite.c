@@ -17,7 +17,7 @@
 
 //#define __TRACE
 #define __need_minmax
-#include <ddk/utils.h>
+#include <os/syslog.h>
 #include <errno.h>
 #include <io.h>
 #include <internal/_file.h>

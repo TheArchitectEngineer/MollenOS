@@ -1,5 +1,5 @@
 /**
- * Copyright 2023, Philip Meulengracht
+ * Copyright 2026, Philip Meulengracht
  *
  * This program is free software : you can redistribute it and / or modify
  * it under the terms of the GNU General Public License as published by
@@ -14,18 +14,17 @@
  * You should have received a copy of the GNU General Public License
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  *
- * Logging for drivers and services. Formats a message and writes it to the
- * kernel log. The NOTICE, WARNING, ERROR and TRACE macros in ddk/utils.h end up
- * here.
+ * Logging to the system log. The NOTICE, WARNING, ERROR and TRACE macros in
+ * os/syslog.h end up here.
  */
 
 #include <internal/_syscalls.h>
-#include <ddk/utils.h>
+#include <os/syslog.h>
 #include <stdarg.h>
 #include <stdio.h>
 
 void
-SystemDebug(
+OSSysLogWrite(
     _In_ enum OSSysLogLevel level,
     _In_ const char*        format, ...)
 {

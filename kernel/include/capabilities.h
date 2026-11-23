@@ -24,7 +24,7 @@
 #define __VALI_CAPABILITIES_H__
 
 #include <os/osdefs.h>
-#include <ddk/types/capabilities.h>
+#include <os/types/capabilities.h>
 
 /**
  * @brief Grants a specific capability to a memory space. This can only be

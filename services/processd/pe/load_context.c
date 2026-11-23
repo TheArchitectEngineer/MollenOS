@@ -16,7 +16,7 @@
  */
 
 #define __TRACE
-#include <ddk/memory.h>
+#include <os/memory_space.h>
 #include <ddk/utils.h>
 #include <ds/mstring.h>
 #include <internal/_syscalls.h>
@@ -66,7 +66,7 @@ PEImageLoadContextNew(
     }
     memset(loadContext, 0, sizeof(struct PEImageLoadContext));
 
-    oserr = CreateMemorySpace(0, &loadContext->MemorySpace, &loadContext->SecurityGroupID);
+    oserr = OSMemorySpaceCreate(0, &loadContext->MemorySpace, &loadContext->SecurityGroupID);
     if (oserr != OS_EOK) {
         free(loadContext);
         return NULL;

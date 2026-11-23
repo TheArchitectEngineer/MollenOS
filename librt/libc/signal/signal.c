@@ -19,7 +19,7 @@
 
 #include <assert.h>
 #include <ddk/service.h>
-#include <ddk/utils.h>
+#include <os/syslog.h>
 #include <errno.h>
 #include <gracht/link/vali.h>
 #include <fenv.h>

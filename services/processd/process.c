@@ -23,7 +23,7 @@
 #include <limits.h>
 #include <ds/mstring.h>
 #include <ds/hashtable.h>
-#include <ddk/barrier.h>
+#include <os/barrier.h>
 #include <os/handle.h>
 #include <ddk/capabilities.h>
 #include <ddk/utils.h>

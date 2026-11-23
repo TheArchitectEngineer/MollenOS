@@ -16,12 +16,13 @@
  */
 #define __TRACE
 
-#include <ddk/utils.h>
+#include <os/syslog.h>
 #include <internal/_io.h>
 #include <inet/socket.h>
 #include <ioctl.h>
 #include <os/handle.h>
 #include <os/services/net.h>
+#include <os/mollenos.h>
 
 static oserr_t __net_read(stdio_handle_t*, void*, size_t, size_t*);
 static oserr_t __net_write(stdio_handle_t*, const void*, size_t, size_t*);

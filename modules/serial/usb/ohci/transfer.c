@@ -20,7 +20,7 @@
 
 #define __need_minmax
 #include <assert.h>
-#include <ddk/barrier.h>
+#include <os/barrier.h>
 #include <os/mollenos.h>
 #include <ddk/utils.h>
 

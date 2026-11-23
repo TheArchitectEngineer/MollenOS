@@ -25,7 +25,7 @@
 //#define __TRACE
 
 #include <arch/utils.h>
-#include <ddk/memory.h>
+#include <os/memory_space.h>
 #include <os/types/shm.h>
 #include <os/types/syscall.h>
 #include <capabilities.h>

@@ -21,7 +21,7 @@
 
 #include <os/osdefs.h>
 #include <acpi.h>
-#include <ddk/pci/acpi.h>
+#include <os/types/acpi_pci.h>
 
 /**
  * @brief Reads ACPI tables needed to configure this architecture's platform.

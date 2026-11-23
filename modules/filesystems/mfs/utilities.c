@@ -201,60 +201,161 @@ Cleanup:
     return oserr;
 }
 
+// Finds the last run of the bucket chain of entry. The walk starts at the data
+// bucket of the handle, which is a run of the chain, so only the runs from the
+// position on are visited. A write at the end of the file has its data bucket
+// in the last run, and then the walk is one map lookup, however long the file
+// is. A handle without a data bucket (MFS_ENDOFCHAIN, see
+// MFSEntryResetPosition) walks from the first bucket of the file. The caller
+// makes sure the file has buckets (StartBucket is not MFS_ENDOFCHAIN).
+// The handle keeps no copy of the last bucket, as a copy goes stale when
+// another handle of the same file adds buckets.
+static oserr_t
+__FindLastRun(
+        _In_  FileSystemMFS_t* mfs,
+        _In_  MFSEntry_t*      entry,
+        _Out_ bucket_t*        lastBucketOut,
+        _Out_ MapRecord_t*     lastRunOut)
+{
+    bucket_t    bucket = entry->DataBucketPosition;
+    MapRecord_t run;
+    oserr_t     oserr;
+
+    if (bucket == MFS_ENDOFCHAIN) {
+        bucket = entry->StartBucket;
+    }
+
+    while (1) {
+        oserr = MFSBucketMapGetLengthAndLink(mfs, bucket, &run);
+        if (oserr != OS_EOK) {
+            ERROR("__FindLastRun failed to get the run of bucket %u in %ms: %u", bucket, entry->Name, oserr);
+            return oserr;
+        }
+        if (run.Link == MFS_ENDOFCHAIN) {
+            break;
+        }
+        bucket = run.Link;
+    }
+
+    *lastBucketOut = bucket;
+    *lastRunOut    = run;
+    return OS_EOK;
+}
+
+// Adds the new buckets to the end of the chain of entry. The new buckets start
+// at newRun.Link, and their first run has newRun.Length buckets.
+// - When the first new run starts at the bucket right after the last run
+//   (lastBucket + lastRun.Length == newRun.Link), the last run is made longer
+//   instead. MFS reads and writes a file one storage request per run, so a
+//   file that grows in small steps would otherwise be read in small requests
+//   for good. The map entry of the last run gets the summed length and the
+//   link of the first new run. The map entry of newRun.Link now lies inside a
+//   run and is not read again.
+// - Otherwise the last run links to the first new run.
+// It is one map write either way. If it fails, the map and the entry stay as
+// they were, and the new buckets are in no file and not on the free list
+// (lost space).
+// The entry keeps two copies of run lengths that are changed here as well:
+// StartLength when the last run is the first run (written to the record at
+// close), and DataBucketLength when the handle is in the last run.
+static oserr_t
+__AppendRun(
+        _In_ FileSystemMFS_t* mfs,
+        _In_ MFSEntry_t*      entry,
+        _In_ MapRecord_t*     newRun)
+{
+    bucket_t    lastBucket;
+    MapRecord_t lastRun;
+    MapRecord_t firstNewRun;
+    uint32_t    joinedLength;
+    oserr_t     oserr;
+
+    oserr = __FindLastRun(mfs, entry, &lastBucket, &lastRun);
+    if (oserr != OS_EOK) {
+        ERROR("__AppendRun failed to find the last run of %ms: %u", entry->Name, oserr);
+        return oserr;
+    }
+
+    if (lastBucket + lastRun.Length != newRun->Link) {
+        TRACE("__AppendRun: linking run %u of %ms to new run %u", lastBucket, entry->Name, newRun->Link);
+        oserr = MFSBucketMapSetLinkAndLength(mfs, lastBucket, newRun->Link, 0, false);
+        if (oserr != OS_EOK) {
+            ERROR("__AppendRun failed to link run %u of %ms to run %u: %u",
+                  lastBucket, entry->Name, newRun->Link, oserr);
+        }
+        return oserr;
+    }
+
+    // The new run follows the last run on disk. Its link is the rest of the
+    // new buckets, or MFS_ENDOFCHAIN.
+    oserr = MFSBucketMapGetLengthAndLink(mfs, newRun->Link, &firstNewRun);
+    if (oserr != OS_EOK) {
+        ERROR("__AppendRun failed to get the run of new bucket %u: %u", newRun->Link, oserr);
+        return oserr;
+    }
+
+    joinedLength = lastRun.Length + newRun->Length;
+    TRACE("__AppendRun: run %u of %ms grows to %u buckets", lastBucket, entry->Name, joinedLength);
+    oserr = MFSBucketMapSetLinkAndLength(mfs, lastBucket, firstNewRun.Link, joinedLength, true);
+    if (oserr != OS_EOK) {
+        ERROR("__AppendRun failed to grow run %u of %ms to %u buckets: %u",
+              lastBucket, entry->Name, joinedLength, oserr);
+        return oserr;
+    }
+
+    if (entry->StartBucket == lastBucket) {
+        entry->StartLength = joinedLength;
+    }
+    if (entry->DataBucketPosition == lastBucket) {
+        entry->DataBucketLength = joinedLength;
+    }
+    return OS_EOK;
+}
+
 oserr_t
 MfsEnsureRecordSpace(
         _In_ FileSystemMFS_t* mfs,
         _In_ MFSEntry_t*      entry,
         _In_ uint64_t         spaceRequired)
 {
-    size_t bucketSizeBytes = mfs->SectorsPerBucket * mfs->SectorSize;
+    size_t      bucketSizeBytes = mfs->SectorsPerBucket * mfs->SectorSize;
+    size_t      sectorCount;
+    size_t      bucketCount;
+    MapRecord_t newRun;
+    oserr_t     oserr;
     TRACE("MfsEnsureRecordSpace(%u)", LODWORD(spaceRequired));
 
-    if (spaceRequired > entry->AllocatedSize) {
-        // Calculate the number of sectors, then number of buckets
-        size_t      sectorCount = (size_t)(DIVUP((spaceRequired - entry->AllocatedSize), mfs->SectorSize));
-        size_t      bucketCount = DIVUP(sectorCount, mfs->SectorsPerBucket);
-        uint32_t    bucketPointer, previousBucketPointer;
-        MapRecord_t iterator, record;
+    if (spaceRequired <= entry->AllocatedSize) {
+        return OS_EOK;
+    }
 
-        // Perform the allocation of buckets
-        if (MFSBucketMapAllocate(mfs, bucketCount, &record) != OS_EOK) {
-            ERROR("Failed to allocate %u buckets for file", bucketCount);
+    // Calculate the number of sectors, then number of buckets
+    sectorCount = (size_t)(DIVUP((spaceRequired - entry->AllocatedSize), mfs->SectorSize));
+    bucketCount = DIVUP(sectorCount, mfs->SectorsPerBucket);
+
+    oserr = MFSBucketMapAllocate(mfs, bucketCount, &newRun);
+    if (oserr != OS_EOK) {
+        ERROR("MfsEnsureRecordSpace failed to allocate %u buckets for %ms: %u", bucketCount, entry->Name, oserr);
+        return OS_EDEVFAULT;
+    }
+
+    if (entry->StartBucket == MFS_ENDOFCHAIN) {
+        // The file had no buckets. The record gets the first new run when the
+        // handle is closed.
+        TRACE("MfsEnsureRecordSpace: initializing record %ms to start=0x%x, length=0x%x",
+              entry->Name, newRun.Link, newRun.Length);
+        entry->StartBucket = newRun.Link;
+        entry->StartLength = newRun.Length;
+    } else {
+        oserr = __AppendRun(mfs, entry, &newRun);
+        if (oserr != OS_EOK) {
+            ERROR("MfsEnsureRecordSpace failed to add %u buckets to %ms: %u", bucketCount, entry->Name, oserr);
             return OS_EDEVFAULT;
         }
-
-        // Now iterate to end
-        bucketPointer         = entry->StartBucket;
-        previousBucketPointer = MFS_ENDOFCHAIN;
-        while (bucketPointer != MFS_ENDOFCHAIN) {
-            previousBucketPointer = bucketPointer;
-            if (MFSBucketMapGetLengthAndLink(mfs, bucketPointer, &iterator) != OS_EOK) {
-                ERROR("MfsEnsureRecordSpace: failed to get record for bucket %u", bucketPointer);
-                return OS_EDEVFAULT;
-            }
-            bucketPointer = iterator.Link;
-        }
-
-        // We have a special case if previous == MFS_ENDOFCHAIN
-        if (previousBucketPointer == MFS_ENDOFCHAIN) {
-            TRACE("MfsEnsureRecordSpace: initializing record %ms to start=0x%x, length=0x%x",
-                  entry->Name, record.Link, record.Length);
-            // This means file had nothing allocated
-            entry->StartBucket = record.Link;
-            entry->StartLength = record.Length;
-        } else {
-            TRACE("MfsEnsureRecordSpace: extending record %ms at bucket=0x%x with link=0x%x, length=0x%x",
-                  entry->Name, previousBucketPointer, record.Link, record.Length);
-            if (MFSBucketMapSetLinkAndLength(mfs, previousBucketPointer, record.Link, 0, false) != OS_EOK) {
-                ERROR("Failed to set record for bucket %u", previousBucketPointer);
-                return OS_EDEVFAULT;
-            }
-        }
-
-        // Adjust the allocated-size of record
-        entry->AllocatedSize += (bucketCount * bucketSizeBytes);
-        entry->ActionOnClose  = MFS_ACTION_UPDATE;
     }
+
+    entry->AllocatedSize += (bucketCount * bucketSizeBytes);
+    entry->ActionOnClose  = MFS_ACTION_UPDATE;
     return OS_EOK;
 }
 
@@ -270,43 +371,71 @@ MFSCloneBucketData(
     return OS_ENOTSUPPORTED;
 }
 
+void
+MFSEntrySetDataRun(
+        _In_ MFSEntry_t* entry,
+        _In_ bucket_t    bucket,
+        _In_ uint32_t    length,
+        _In_ uint64_t    byteBoundary)
+{
+    entry->DataBucketPosition = bucket;
+    entry->DataBucketLength   = length;
+    entry->BucketByteBoundary = byteBoundary;
+    if (bucket == entry->StartBucket) {
+        entry->StartLength = length;
+    }
+}
+
+// Called when the position of entry is at the end of its data bucket, as the
+// handle's copy of the run length (DataBucketLength) gives it. The map entry
+// of the run is read first:
+// - The run is longer in the map than in the copy. Another handle of the same
+//   file, or this handle before a crash, made it longer (see __AppendRun in
+//   this file). The position still lies in the run, so the handle stays and
+//   only takes the new length. Stepping on would add the map's length to
+//   BucketByteBoundary and skip the bytes the run grew by.
+// - The run has no link. OS_ENOENT is returned, and the handle is unchanged.
+// - Otherwise the handle steps to the linked run.
 oserr_t
 MFSAdvanceToNextBucket(
         _In_ FileSystemMFS_t* mfs,
         _In_ MFSEntry_t*      entry)
 {
-    MapRecord_t record;
-    uint32_t    nextDataBucketPosition;
     size_t      bucketSizeBytes = mfs->SectorsPerBucket * mfs->SectorSize;
-    size_t      currentLinkLength;
+    MapRecord_t currentRun;
+    MapRecord_t nextRun;
+    oserr_t     oserr;
 
-    // We have to look up the record for current bucket
-    if (MFSBucketMapGetLengthAndLink(mfs, entry->DataBucketPosition, &record) != OS_EOK) {
-        ERROR("MFSAdvanceToNextBucket failed to get record for bucket %u", entry->DataBucketPosition);
+    oserr = MFSBucketMapGetLengthAndLink(mfs, entry->DataBucketPosition, &currentRun);
+    if (oserr != OS_EOK) {
+        ERROR("MFSAdvanceToNextBucket failed to get the run of bucket %u: %u", entry->DataBucketPosition, oserr);
         return OS_EDEVFAULT;
     }
-    TRACE("MFSAdvanceToNextBucket: bucket 0x%x, record=0x%x, length=0x%x",
-          entry->DataBucketPosition, record.Link, record.Length);
+    TRACE("MFSAdvanceToNextBucket: bucket 0x%x, link=0x%x, length=0x%x",
+          entry->DataBucketPosition, currentRun.Link, currentRun.Length);
 
-    // Check for EOL
-    if (record.Link == MFS_ENDOFCHAIN) {
+    if (currentRun.Length > entry->DataBucketLength) {
+        MFSEntrySetDataRun(entry, entry->DataBucketPosition, currentRun.Length, entry->BucketByteBoundary);
+        return OS_EOK;
+    }
+
+    if (currentRun.Link == MFS_ENDOFCHAIN) {
         return OS_ENOENT;
     }
 
-    currentLinkLength = (record.Length * bucketSizeBytes);
-    nextDataBucketPosition = record.Link;
-
-    // Lookup length of record
-    if (MFSBucketMapGetLengthAndLink(mfs, record.Link, &record) != OS_EOK) {
-        ERROR("Failed to get length for bucket %u", entry->DataBucketPosition);
+    oserr = MFSBucketMapGetLengthAndLink(mfs, currentRun.Link, &nextRun);
+    if (oserr != OS_EOK) {
+        ERROR("MFSAdvanceToNextBucket failed to get the run of bucket %u: %u", currentRun.Link, oserr);
         return OS_EDEVFAULT;
     }
-    TRACE("MFSAdvanceToNextBucket: bucket 0x%x, record=0x%x, length=0x%x",
-          nextDataBucketPosition, record.Link, record.Length);
+    TRACE("MFSAdvanceToNextBucket: bucket 0x%x, link=0x%x, length=0x%x",
+          currentRun.Link, nextRun.Link, nextRun.Length);
 
-    // Store length & Update bucket boundary
-    entry->BucketByteBoundary += currentLinkLength;
-    entry->DataBucketPosition = nextDataBucketPosition;
-    entry->DataBucketLength   = record.Length;
+    MFSEntrySetDataRun(
+            entry,
+            currentRun.Link,
+            nextRun.Length,
+            entry->BucketByteBoundary + (currentRun.Length * bucketSizeBytes)
+    );
     return OS_EOK;
 }

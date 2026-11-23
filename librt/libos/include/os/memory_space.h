@@ -16,12 +16,16 @@
  *
  */
 
-#ifndef __DDK_MEMORY_H__
-#define __DDK_MEMORY_H__
+#ifndef __OS_MEMORY_SPACE_H__
+#define __OS_MEMORY_SPACE_H__
 
-#include <ddk/ddkdefs.h>
+#include <os/osdefs.h>
 #include <os/types/memory.h>
 
+_CODE_BEGIN
+
+// Where and how OSMemorySpaceCreateMapping places a mapping in the target
+// memory space. Flags takes the MEMORY_* values of os/types/memory.h.
 struct MemoryMappingParameters {
     uintptr_t    VirtualAddress;
     size_t       Length;
@@ -37,8 +41,8 @@ struct MemoryMappingParameters {
  * @return OS_EOK on success, OS_EINVALPARAMS for a missing output pointer,
  *         or an error from the kernel.
  */
-DDKDECL(oserr_t,
-CreateMemorySpace(
+CRTDECL(oserr_t,
+OSMemorySpaceCreate(
     _In_  unsigned int flags,
     _Out_ uuid_t*      msHandleOut,
     _Out_ uuid_t*      securityHandleOut));
@@ -51,8 +55,8 @@ CreateMemorySpace(
  * @return OS_EOK on success, OS_EINVALPARAMS for a missing output pointer,
  *         or an error from the kernel.
  */
-DDKDECL(oserr_t,
-GetMemorySpaceForThread(
+CRTDECL(oserr_t,
+OSMemorySpaceGetForThread(
     _In_  uuid_t  thread,
     _Out_ uuid_t* handleOut));
 
@@ -66,10 +70,12 @@ GetMemorySpaceForThread(
  * @return OS_EOK on success, OS_EINVALPARAMS for a missing pointer,
  *         or an error from the kernel.
  */
-DDKDECL(oserr_t,
-CreateMemoryMapping(
+CRTDECL(oserr_t,
+OSMemorySpaceCreateMapping(
     _In_  uuid_t                          handle,
     _In_  struct MemoryMappingParameters* parameters,
     _Out_ void**                          addressOut));
 
-#endif //!__DDK_MEMORY_H__
+_CODE_END
+
+#endif //!__OS_MEMORY_SPACE_H__

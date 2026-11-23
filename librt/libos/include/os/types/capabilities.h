@@ -20,8 +20,8 @@
  *   services may require.
  */
 
-#ifndef __DDK_TYPES_CAPABILITIES_H__
-#define __DDK_TYPES_CAPABILITIES_H__
+#ifndef __OS_TYPES_CAPABILITIES_H__
+#define __OS_TYPES_CAPABILITIES_H__
 
 typedef enum Capabilities {
     // Grant the capability to grant other processes capabilities.
@@ -47,4 +47,4 @@ typedef enum Capabilities {
     CAPABILITY_RAMDISK_ACCESS | CAPABILITY_DEVICEIO_MANAGEMENT | \
     CAPABILITY_INTERRUPT_CONTROL | CAPABILITY_MEMORYSPACE_MANAGEMENT)
 
-#endif //!__DDK_TYPES_CAPABILITIES_H__
+#endif //!__OS_TYPES_CAPABILITIES_H__

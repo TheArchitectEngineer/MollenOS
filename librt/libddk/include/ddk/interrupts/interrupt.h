@@ -24,7 +24,8 @@
 #ifndef __DDK_INTERRUPT_H__
 #define __DDK_INTERRUPT_H__
 
-#include <ddk/types/interrupt.h>
+#include <ddk/ddkdefs.h>
+#include <os/types/interrupt.h>
 
 DECL_STRUCT(DeviceIo);
 DECL_STRUCT(BusDevice);

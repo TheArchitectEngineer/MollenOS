@@ -24,7 +24,8 @@
 #define _X86_PCI_H_
 
 #include <os/osdefs.h>
-#include <ddk/io.h>
+#include <os/types/deviceio.h>
+#include <os/volatile.h>
 
 #define X86_PCI_SELECT		0xCF8
 #define X86_PCI_DATA		0xCFC

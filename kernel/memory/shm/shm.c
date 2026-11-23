@@ -20,7 +20,7 @@
 #define __need_minmax
 #include <arch/utils.h>
 #include <debug.h>
-#include <ddk/barrier.h>
+#include <os/barrier.h>
 #include <ds/streambuffer.h>
 #include <handles/global.h>
 #include <handles/handle.h>

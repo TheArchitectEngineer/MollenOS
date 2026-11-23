@@ -38,7 +38,7 @@ enum OSIOCtlRequest {
     // Moves the device to a new stage. The argument is the stage value (prepare,
     // start or stop). Prepare only turns on register access. Start also lets the
     // device do DMA, and stop turns DMA off again.
-    OSIOCTLREQUEST_DEVICE_ACTIVATE     = 6,
+    OSIOCTLREQUEST_DEVICE_SET_STAGE    = 6,
     // Returns the MAC and PHY wiring and the PHY reset timings from firmware data.
     // Does not touch the hardware, so it works before the device is prepared.
     OSIOCTLREQUEST_ETHERNET_CONFIG     = 7 | __IOCTL_IN,

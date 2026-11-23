@@ -21,7 +21,7 @@
 #define __need_minmax
 #include <assert.h>
 #include <ddk/utils.h>
-#include <ddk/barrier.h>
+#include <os/barrier.h>
 #include <string.h>
 #include <stdlib.h>
 

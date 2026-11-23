@@ -23,7 +23,7 @@
 
 #include <assert.h>
 #include <internal/_tls.h>
-#include <ddk/utils.h>
+#include <os/syslog.h>
 #include <internal/_utils.h>
 #include <math.h>
 #include <threads.h>

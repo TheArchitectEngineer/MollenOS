@@ -15,56 +15,22 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  *
  *
- * Utils Definitions & Structures
- * - This header describes the base utils-structures, prototypes
- *   and functionality, refer to the individual things for descriptions
+ * Helpers for drivers. Brings in the log macros of os/syslog.h and adds macros
+ * that wait for a condition while sleeping between the checks.
  */
 
 #ifndef __DDK_UTILS_H__
 #define __DDK_UTILS_H__
 
 #include <ddk/ddkdefs.h>
-#include <os/types/syslog.h>
-
-/* Global <always-on> definitions
- * These are enabled no matter which kind of debugging is enabled */
-#define STR(str)               str
-#define NOTICE(...)            SystemDebug(OSSYSLOGLEVEL_TRACE, __VA_ARGS__)
-#define DEBUG(...)             SystemDebug(OSSYSLOGLEVEL_DEBUG, __VA_ARGS__)
-#define WARNING(...)           SystemDebug(OSSYSLOGLEVEL_WARNING, __VA_ARGS__)
-#define WARNING_IF(cond, ...)  { if ((cond)) { SystemDebug(OSSYSLOGLEVEL_WARNING, __VA_ARGS__); } }
-#define WARNING_ONCE(id, ...)  { \
-                                    static _Atomic(int) __gi_ ##id ## _trigger = 0; \
-                                    if (!atomic_exchange(&__gi_ ##id ## _trigger, 1)) { \
-                                        SystemDebug(OSSYSLOGLEVEL_WARNING, __VA_ARGS__); \
-                                    } \
-                               }
-#define ERROR(...)	           SystemDebug(OSSYSLOGLEVEL_ERROR, __VA_ARGS__)
-#define TODO(msg)              SystemDebug(OSSYSLOGLEVEL_WARNING, "TODO: %s, line %d, %s", __FILE__, __LINE__, msg)
-
-/**
- * Global <toggable> definitions
- * These can be turned on per-source file by pre-defining the __TRACE before inclusion
- */
-#ifdef __TRACE
-#include <time.h>
-#define __TS_DIFF_MS(start, end) (((end.tv_sec - start.tv_sec) * MSEC_PER_SEC) + ((end.tv_nsec - start.tv_nsec) / NSEC_PER_MSEC))
-
-#define TRACE(...) SystemDebug(OSSYSLOGLEVEL_TRACE, __VA_ARGS__)
-#define ENTRY(...) struct timespec start, end; SystemDebug(OSSYSLOGLEVEL_TRACE, __VA_ARGS__); timespec_get(&start, TIME_MONOTONIC)
-#define EXIT(msg)  timespec_get(&end, TIME_MONOTONIC); SystemDebug(OSSYSLOGLEVEL_TRACE, msg " completed in %llu ms", __TS_DIFF_MS(start, end))
-#else
-#define TRACE(...)
-#define ENTRY(...)
-#define EXIT(msg)
-#endif
+#include <os/syslog.h>
 
 /* Threading Utility
  * Waits for a condition to set in a busy-loop using thrd_sleep */
 #define WaitForCondition(condition, runs, wait, message, ...)\
     for (unsigned int timeout_ = 0; !(condition); timeout_++) {\
         if (timeout_ >= runs) {\
-             SystemDebug(OSSYSLOGLEVEL_WARNING, message, __VA_ARGS__);\
+             OSSysLogWrite(OSSYSLOGLEVEL_WARNING, message, __VA_ARGS__);\
              break;\
 		}\
         thrd_sleep(&(struct timespec) { .tv_nsec = wait * NSEC_PER_MSEC }, NULL);\
@@ -82,20 +48,5 @@
         thrd_sleep(&(struct timespec) { .tv_nsec = wait * NSEC_PER_MSEC }, NULL);\
 	}
 
-_CODE_BEGIN
-
-/**
- * @brief Debug/trace printing for userspace application and drivers. Writes to the kernel log.
- *
- * @param level  Log level of the message, one of the OSSYSLOGLEVEL_* values.
- * @param format printf-style format, followed by its arguments. The formatted
- *               message is cut off after 254 characters.
- */
-DDKDECL(void,
-SystemDebug(
-    _In_ enum OSSysLogLevel level,
-    _In_ const char*        format, ...));
-
-_CODE_END
 
 #endif //!__DDK_UTILS_H__

@@ -25,7 +25,7 @@
 
 #include <ddk/interrupts/interrupt.h>
 #include <ddk/utils.h>
-#include <ddk/barrier.h>
+#include <os/barrier.h>
 #include <os/device.h>
 #include "../common/hci.h"
 #include "ehci.h"

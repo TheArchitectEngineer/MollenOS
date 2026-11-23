@@ -20,7 +20,7 @@
 
 #include <assert.h>
 #include <errno.h>
-#include <ddk/utils.h>
+#include <os/syslog.h>
 #include <os/handle.h>
 #include <os/notification_queue.h>
 #include <os/mutex.h>

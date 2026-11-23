@@ -16,7 +16,7 @@
  * You should have received a copy of the GNU General Public License
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  *
- * Wrappers for OSIOCTLREQUEST_DEVICE_RESOURCES and OSIOCTLREQUEST_DEVICE_ACTIVATE.
+ * Wrappers for OSIOCTLREQUEST_DEVICE_RESOURCES and OSIOCTLREQUEST_DEVICE_SET_STAGE.
  * A driver asks the bus of its device for the register ranges, and tells it
  * when the device is prepared, started and stopped.
  */
@@ -42,7 +42,7 @@ DeviceGetResources(
         device,
         OSIOCTLREQUEST_DEVICE_RESOURCES,
         &result,
-        sizeof(result)
+        sizeof(struct DeviceResources)
     );
     if (status != OS_EOK) {
         return status;
@@ -62,5 +62,10 @@ DeviceSetStage(
     _In_ uuid_t           device,
     _In_ enum DeviceStage stage)
 {
-    return OSDeviceIOCtl(device, OSIOCTLREQUEST_DEVICE_ACTIVATE, &stage, sizeof(stage));
+    return OSDeviceIOCtl(
+        device,
+        OSIOCTLREQUEST_DEVICE_SET_STAGE,
+        &stage,
+        sizeof(enum DeviceStage)
+    );
 }

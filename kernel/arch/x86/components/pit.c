@@ -26,7 +26,7 @@
 
 #include <arch/io.h>
 #include <component/timer.h>
-#include <ddk/io.h>
+#include <os/types/deviceio.h>
 #include <debug.h>
 #include <hpet.h>
 #include <interrupts/interrupts.h>

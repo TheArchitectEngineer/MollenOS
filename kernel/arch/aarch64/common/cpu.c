@@ -20,7 +20,7 @@
 #include <arch/utils.h>
 #include <arch/interrupts.h>
 #include <component/cpu.h>
-#include <ddk/ddkdefs.h>
+#include <os/osdefs.h>
 #include <machine.h>
 #include <os/types/query.h>
 #include <string.h>

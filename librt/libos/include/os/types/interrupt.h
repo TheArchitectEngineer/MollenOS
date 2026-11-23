@@ -21,12 +21,22 @@
  *   and functionality, refer to the individual things for descriptions
  */
 
-#ifndef __DDK_TYPES_INTERRUPT_H__
-#define __DDK_TYPES_INTERRUPT_H__
+#ifndef __OS_TYPES_INTERRUPT_H__
+#define __OS_TYPES_INTERRUPT_H__
 
-#include <ddk/ddkdefs.h>
+#include <os/osdefs.h>
 
 DECL_STRUCT(DeviceIo);
+
+/**
+ * Result of a fast interrupt handler. It tells the kernel whether the device
+ * of the handler raised the interrupt, which matters when several devices
+ * share one interrupt line.
+ */
+typedef enum {
+    IRQSTATUS_NOT_HANDLED,
+    IRQSTATUS_HANDLED
+} irqstatus_t;
 
 #define INTERRUPT_NONE                      (int)-1
 // Legacy candidate-vector list size, not the negotiated message-group limit.
@@ -170,4 +180,4 @@ typedef enum InterruptSourceKind {
     InterruptSourceMessage
 } InterruptSourceKind_t;
 
-#endif //!__DDK_TYPES_INTERRUPT_H__
+#endif //!__OS_TYPES_INTERRUPT_H__

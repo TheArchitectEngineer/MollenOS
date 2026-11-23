@@ -27,7 +27,9 @@
 #include <assert.h>
 #include <component/domain.h>
 #include <component/cpu.h>
-#include <ddk/io.h>
+#include <os/types/deviceio.h>
+#include <os/volatile.h>
+#include <os/tls.h>
 #include <debug.h>
 #include <handles/handle.h>
 #include <heap.h>

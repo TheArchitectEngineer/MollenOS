@@ -18,7 +18,8 @@
 #ifndef __DDK_INTERRUPT_BUS_H__
 #define __DDK_INTERRUPT_BUS_H__
 
-#include <ddk/types/interrupt-bus.h>
+#include <ddk/ddkdefs.h>
+#include <os/types/interrupt_bus.h>
 
 // Bus operations must run outside interrupt context. Attaching groups, managing
 // bus handlers and reaping groups require INTERRUPT_CONTROL and

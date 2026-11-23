@@ -25,7 +25,7 @@
 #define __VALI_OUTPUT_H__
 
 #include <os/osdefs.h>
-#include <ddk/video.h>
+#include <os/types/video.h>
 
 typedef struct BootTerminal {
     unsigned int				AvailableOutputs;

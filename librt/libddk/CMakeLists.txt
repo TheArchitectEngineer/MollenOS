@@ -74,7 +74,6 @@ add_library(libddk
     interrupts/pci.c
 
     io/deviceio.c
-    io/volatile.c
 
     services/service.c
     services/storage.c
@@ -82,8 +81,6 @@ add_library(libddk
 
     system/capabilities.c
     system/debug.c
-    system/log.c
-    system/memory.c
     system/video.c
 
     # Code from other projects, kept as it was written.

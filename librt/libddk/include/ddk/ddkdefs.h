@@ -19,95 +19,11 @@
 #define __DDK_DEFINITIONS_H__
 
 #include <os/mollenos.h>
-
-/**
- * Introduce registry types for drivers
- */
-typedef uint32_t reg32_t;
-typedef uint64_t reg64_t;
+#include <os/tls.h>
+#include <os/types/interrupt.h>
+#include <os/types/register.h>
 
 #define DDKDECL(ReturnType, Function) extern ReturnType Function
 #define DDKDECL_DATA(Type, Name) extern Type Name
-
-#ifndef TESTING
-#if defined(i386) || defined(__i386__)
-typedef reg32_t reg_t;
-
-#define TLS_VALUE uint32_t
-#define TLS_READ(offset, value)  __asm { __asm mov ebx, [offset] __asm mov eax, gs:[ebx] __asm mov [value], eax }
-#define TLS_WRITE(offset, value) __asm { __asm mov ebx, [offset] __asm mov eax, [value] __asm mov gs:[ebx], eax }
-#elif defined(amd64) || defined(__amd64__)
-typedef reg64_t reg_t;
-
-#define TLS_VALUE uint64_t
-#define TLS_READ(offset, value)  __asm { __asm mov rbx, [offset] __asm mov rax, gs:[rbx] __asm mov [value], rax }
-#define TLS_WRITE(offset, value) __asm { __asm mov rbx, [offset] __asm mov rax, [value] __asm mov gs:[rbx], rax }
-#elif defined(__aarch64__)
-typedef reg64_t reg_t;
-
-#define TLS_VALUE uint64_t
-// Preserve Vali's reserved-slot ABI. User slots belong to the execution unit;
-// slot 0 selects the active logical thread/job. The kernel has a separate,
-// privileged anchor and must never use the user-controlled TPIDR_EL0 value.
-#if defined(LIBC_KERNEL)
-#define __VALI_TLS_REGISTER "tpidr_el1"
-#else
-#define __VALI_TLS_REGISTER "tpidr_el0"
-#endif
-#define TLS_READ(offset, value) do {                                  \
-    uintptr_t __vali_slots;                                          \
-    __asm__ volatile("mrs %0, " __VALI_TLS_REGISTER                    \
-                     : "=r"(__vali_slots) : : "memory");              \
-    (value) = *(volatile TLS_VALUE*)(__vali_slots + (offset));         \
-} while (0)
-#define TLS_WRITE(offset, value) do {                                 \
-    uintptr_t __vali_slots;                                          \
-    __asm__ volatile("mrs %0, " __VALI_TLS_REGISTER                    \
-                     : "=r"(__vali_slots) : : "memory");              \
-    *(volatile TLS_VALUE*)(__vali_slots + (offset)) = (value);         \
-} while (0)
-#else
-#error "Implement rw for tls for this architecture"
-#endif //defined(i386) || defined(__i386__)
-#else  //TESTING
-#define TLS_VALUE int
-#define TLS_READ(offset, value) (value = offset)
-#define TLS_WRITE(offset, value) (value = offset)
-#endif //!TESTING
-
-/**
- * Introduce interrupt status codes for drivers, these are used in the fast interrupt handlers.
- */
-typedef enum {
-    IRQSTATUS_NOT_HANDLED,
-    IRQSTATUS_HANDLED
-} irqstatus_t;
-
-/**
- * @brief Read from the TLS register index. On the X86 architecture this is done by using
- * the GS register.
- */
-SERVICEAPI size_t SERVICEABI
-__get_reserved(
-        _In_ size_t tlsIndex)
-{
-    TLS_VALUE tlsValue  = 0;
-    size_t    tlsOffset = (tlsIndex * sizeof(TLS_VALUE));
-    TLS_READ(tlsOffset, tlsValue);
-    return (size_t)tlsValue;
-}
-
-/**
- * @brief Write to the TLS register index. On the X86 architecture this is done by using
- * the GS register.
- */
-SERVICEAPI void SERVICEABI
-__set_reserved(
-        _In_ size_t    tlsIndex,
-        _In_ TLS_VALUE tlsValue)
-{
-    size_t tlsOffset = (tlsIndex * sizeof(TLS_VALUE));
-    TLS_WRITE(tlsOffset, tlsValue);
-}
 
 #endif //!__DDK_DEFINITIONS_H__

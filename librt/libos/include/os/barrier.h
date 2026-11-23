@@ -20,8 +20,8 @@
  * Memory and Hardware Barriers
  */
  
-#ifndef __DDK_BARRIERS_H__
-#define __DDK_BARRIERS_H__
+#ifndef __OS_BARRIER_H__
+#define __OS_BARRIER_H__
 
 #include <crtdefs.h>
 
@@ -172,4 +172,4 @@
 
 #endif
 
-#endif //!__DDK_BARRIERS_H__
+#endif //!__OS_BARRIER_H__

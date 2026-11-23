@@ -18,7 +18,7 @@
 //#define __TRACE
 
 #include "assert.h"
-#include "ddk/utils.h"
+#include "os/syslog.h"
 #include "errno.h"
 #include "internal/_io.h"
 #include "os/spinlock.h"

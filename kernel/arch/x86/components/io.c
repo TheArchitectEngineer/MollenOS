@@ -23,7 +23,7 @@
 #define __MODULE "IOLL"
 
 #include <arch/io.h>
-#include <ddk/barrier.h>
+#include <os/barrier.h>
 #include <debug.h>
 #include <arch/x86/arch.h>
 #include <arch/x86/pci.h>

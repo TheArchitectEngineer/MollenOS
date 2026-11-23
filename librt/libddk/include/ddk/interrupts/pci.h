@@ -18,6 +18,7 @@
 #ifndef __DDK_PCI_INTERRUPT_H__
 #define __DDK_PCI_INTERRUPT_H__
 
+#include <ddk/ddkdefs.h>
 #include <ddk/types/interrupt-pci.h>
 #include <ddk/interrupts/interrupt.h>
 

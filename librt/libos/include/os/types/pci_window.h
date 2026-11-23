@@ -16,10 +16,10 @@
  *
  */
 
-#ifndef __DDK_PCI_WINDOWS_H__
-#define __DDK_PCI_WINDOWS_H__
+#ifndef __OS_TYPES_PCI_WINDOW_H__
+#define __OS_TYPES_PCI_WINDOW_H__
 
-#include <ddk/ddkdefs.h>
+#include <os/osdefs.h>
 
 // The values match the PCI address-space encoding used by device-tree ranges,
 // so they can be copied directly from the device-tree.
@@ -154,4 +154,4 @@ __PciTranslateWindow(
     return OS_EOK;
 }
 
-#endif //!__DDK_PCI_WINDOWS_H__
+#endif //!__OS_TYPES_PCI_WINDOW_H__

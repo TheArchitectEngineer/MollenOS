@@ -17,7 +17,7 @@
 
 //#define __TRACE
 #define __need_minmax
-#include <ddk/utils.h>
+#include <os/syslog.h>
 #include <errno.h>
 #include <internal/_io.h>
 #include <internal/_shm_transfer.h>
@@ -27,6 +27,7 @@
 #include <os/services/file.h>
 #include <os/memory.h>
 #include <os/shm.h>
+#include <os/mollenos.h>
 #include <string.h>
 
 static oserr_t __file_read(stdio_handle_t*, void*, size_t, size_t*);

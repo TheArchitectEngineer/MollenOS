@@ -20,7 +20,7 @@
  */
 
 #include <os/types/syscall.h>
-#include <ddk/barrier.h>
+#include <os/barrier.h>
 #include <debug.h>
 #include <assert.h>
 #include <handles/handle.h>

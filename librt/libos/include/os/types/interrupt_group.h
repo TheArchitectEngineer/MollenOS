@@ -15,10 +15,10 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef __DDK_TYPES_INTERRUPT_GROUP_H__
-#define __DDK_TYPES_INTERRUPT_GROUP_H__
+#ifndef __OS_TYPES_INTERRUPT_GROUP_H__
+#define __OS_TYPES_INTERRUPT_GROUP_H__
 
-#include <ddk/types/interrupt.h>
+#include <os/types/interrupt.h>
 
 /**
  * Kernel reservation request for one resource kind: one legacy/fixed line or
@@ -71,4 +71,4 @@ typedef struct InterruptBindRequest {
     InterruptResourceTable_t Resources;
 } InterruptBindRequest_t;
 
-#endif //!__DDK_TYPES_INTERRUPT_GROUP_H__
+#endif //!__OS_TYPES_INTERRUPT_GROUP_H__

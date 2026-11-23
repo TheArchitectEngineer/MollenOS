@@ -16,7 +16,8 @@
  *
  */
 
-#include <ddk/ddkdefs.h> // for __reserved
+#include <os/mollenos.h>
+#include <os/tls.h>
 #include <internal/_tls.h>
 #include <internal/_syscalls.h>
 #include <os/usched/job.h>

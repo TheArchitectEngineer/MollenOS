@@ -161,7 +161,7 @@ and cleanup requirements explicit.
 
 PCI query and control structures are declared in `ddk/types/interrupt-pci.h` and
 contain only PCI capability and programming data. Common resource values are
-in `ddk/types/interrupt.h`. Syscall group requests are in `interrupt-group.h`,
+in `os/types/interrupt.h`. Syscall group requests are in `interrupt-group.h`,
 bus driver firmware identities in `interrupt-controller.h`, and platform source
 requests in `interrupt-source.h`. The common values do not include driver
 lifecycle declarations.

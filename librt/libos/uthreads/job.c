@@ -18,7 +18,7 @@
 //#define __TRACE
 
 #include <assert.h>
-#include <ddk/utils.h>
+#include <os/syslog.h>
 #include <os/usched/cond.h>
 #include <os/usched/job.h>
 #include <os/usched/usched.h>

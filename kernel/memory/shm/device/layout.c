@@ -35,7 +35,7 @@
 #include <shm/access.h>
 #include <arch/utils.h>
 #include <assert.h>
-#include <ddk/barrier.h>
+#include <os/barrier.h>
 #include <debug.h>
 #include <heap.h>
 #include <limits.h>

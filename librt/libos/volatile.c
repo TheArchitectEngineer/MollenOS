@@ -20,7 +20,7 @@
  * or merge. The kernel builds this file as well.
  */
 
-#include <ddk/io.h>
+#include <os/volatile.h>
 
 void
 ReadVolatileMemory(

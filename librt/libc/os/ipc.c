@@ -19,7 +19,7 @@
 #define __need_minmax
 //#define __TRACE
 
-#include <ddk/utils.h>
+#include <os/syslog.h>
 #include <ds/streambuffer.h>
 #include <errno.h>
 #include <internal/_io.h>
@@ -30,6 +30,7 @@
 #include <os/handle.h>
 #include <os/ipc.h>
 #include <os/shm.h>
+#include <os/mollenos.h>
 #include <stdlib.h>
 
 struct IPCContext {

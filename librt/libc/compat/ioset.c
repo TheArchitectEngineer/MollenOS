@@ -18,7 +18,7 @@
 //#define __TRACE
 
 #include "os/notification_queue.h"
-#include <ddk/utils.h>
+#include <os/syslog.h>
 #include <errno.h>
 #include <internal/_io.h>
 #include <internal/_tls.h>

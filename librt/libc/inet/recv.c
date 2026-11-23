@@ -45,11 +45,12 @@
 
 //#define __TRACE
 
-#include <ddk/utils.h>
+#include <os/syslog.h>
 #include <errno.h>
 #include <internal/_io.h>
 #include <inet/local.h>
 #include <os/services/net.h>
+#include <os/mollenos.h>
 
 intmax_t recvmsg(int iod, struct msghdr* msg_hdr, int flags)
 {

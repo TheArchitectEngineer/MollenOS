@@ -15,7 +15,7 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include <ddk/utils.h>
+#include <os/syslog.h>
 #include <errno.h>
 #include <event.h>
 #include <internal/_io.h>

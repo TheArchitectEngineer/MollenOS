@@ -15,10 +15,10 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef __DDK_TYPES_INTERRUPT_CONTROLLER_H__
-#define __DDK_TYPES_INTERRUPT_CONTROLLER_H__
+#ifndef __OS_TYPES_INTERRUPT_CONTROLLER_H__
+#define __OS_TYPES_INTERRUPT_CONTROLLER_H__
 
-#include <ddk/types/interrupt.h>
+#include <os/types/interrupt.h>
 
 typedef enum InterruptMessageControllerKind {
     // The platform's shared PCI message fabric, currently provided on x86.
@@ -60,4 +60,4 @@ typedef struct InterruptLineSourceIdentity {
     uint32_t Reserved;
 } InterruptLineSourceIdentity_t;
 
-#endif //!__DDK_TYPES_INTERRUPT_CONTROLLER_H__
+#endif //!__OS_TYPES_INTERRUPT_CONTROLLER_H__

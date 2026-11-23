@@ -22,7 +22,8 @@
 
 //#define __TRACE
 
-#include <ddk/utils.h>
+#include <os/syslog.h>
+#include <os/tls.h>
 #include <internal/_tls.h>
 #include <inttypes.h>
 

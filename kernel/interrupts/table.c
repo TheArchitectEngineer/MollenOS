@@ -23,7 +23,8 @@
  */
 
 #include <arch/io.h>
-#include <ddk/interrupts/interrupt.h>
+#include <os/types/interrupt.h>
+#include <os/volatile.h>
 #include <debug.h>
 #include <ds/streambuffer.h>
 #include <interrupts/interrupts.h>

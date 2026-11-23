@@ -17,7 +17,7 @@
  */
 
 #include <assert.h>
-#include <ddk/ddkdefs.h> // for __reserved
+#include <os/tls.h>
 #include <internal/_locale.h>
 #include <internal/_utils.h>
 #include <os/handle.h>

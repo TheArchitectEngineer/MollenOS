@@ -20,7 +20,7 @@
  * touching hardware registers.
  */
 
-#include <ddk/types/interrupt.h>
+#include <os/types/interrupt.h>
 #include <debug.h>
 #include <log.h>
 #include <string.h>

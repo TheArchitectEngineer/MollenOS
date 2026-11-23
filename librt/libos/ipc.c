@@ -19,7 +19,7 @@
 //#define __TRACE
 
 #define __need_minmax
-#include <ddk/utils.h>
+#include <os/syslog.h>
 #include <ds/streambuffer.h>
 #include <errno.h>
 #include <internal/_syscalls.h>

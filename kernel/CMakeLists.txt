@@ -49,7 +49,7 @@ endmacro ()
 
 # Configure source files
 add_executable (vali-core
-    ../librt/libddk/io.c
+    ../librt/libos/volatile.c
     capabilities.c
     debug.c
     deviceio.c

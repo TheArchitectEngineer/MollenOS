@@ -24,7 +24,7 @@
 #define __MEMORY_SPACE_INTERFACE__
 
 #include <arch/platform.h>
-#include <ddk/types/capabilities.h>
+#include <os/types/capabilities.h>
 #include <os/types/memory.h>
 #include <utils/dynamic_memory_pool.h>
 #include <vboot/vboot.h>

@@ -28,7 +28,7 @@
  */
 
 #include <errno.h>
-#include <ddk/utils.h>
+#include <os/syslog.h>
 #include <internal/_io.h>
 #include <inet/local.h>
 #include <inet/socket.h>

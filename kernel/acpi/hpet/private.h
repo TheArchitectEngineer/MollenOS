@@ -20,7 +20,8 @@
 
 #include <arch/io.h>
 #include <os/osdefs.h>
-#include <ddk/ddkdefs.h>
+#include <os/types/register.h>
+#include <os/volatile.h>
 
 /**
  * HPET Definitions

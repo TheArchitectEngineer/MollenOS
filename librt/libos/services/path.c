@@ -18,7 +18,7 @@
 
 //#define __TRACE
 
-#include <ddk/utils.h>
+#include <os/syslog.h>
 #include <ddk/service.h>
 #include <gracht/link/vali.h>
 #include <internal/_utils.h>

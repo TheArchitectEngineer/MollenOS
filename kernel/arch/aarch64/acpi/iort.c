@@ -15,7 +15,7 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include <ddk/types/interrupt.h>
+#include <os/types/interrupt.h>
 #include <heap.h>
 #include <debug.h>
 #include <string.h>

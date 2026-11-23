@@ -21,7 +21,7 @@
 #ifndef __INTERRUPTS_RESOURCES_H__
 #define __INTERRUPTS_RESOURCES_H__
 
-#include <ddk/interrupts/interrupt.h>
+#include <os/types/interrupt.h>
 
 /**
  * @brief Check a copied handler resource description before mapping it.

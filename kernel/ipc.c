@@ -17,7 +17,7 @@
 
 //#define __TRACE
 
-#include <ddk/barrier.h>
+#include <os/barrier.h>
 #include <ds/streambuffer.h>
 #include <debug.h>
 #include <handles/global.h>

@@ -67,6 +67,9 @@
 #define NOTIMPLEMENTED(Message) DebugPanic(FATAL_SCOPE_KERNEL, NULL, "NOT-IMPLEMENTED: %s, line %d, %s", __FILE__, __LINE__, Message)
 #define TODO(Message)           LogAppendMessage(OSSYSLOGLEVEL_WARNING, "TODO: %s, line %d, %s", __FILE__, __LINE__, Message)
 #else //!TESTING
+#ifndef DEBUG
+#define DEBUG(...)              printf(__VA_ARGS__)
+#endif
 #define WARNING(...)            printf(__VA_ARGS__)
 #define ERROR(...)              fprintf(stderr, __VA_ARGS__)
 #define FATAL(Scope, ...)       fprintf(stderr, __VA_ARGS__)

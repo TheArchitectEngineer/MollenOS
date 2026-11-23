@@ -24,7 +24,7 @@
 #include <shm/device.h>
 #include <shm/access.h>
 #include <arch/utils.h>
-#include <ddk/barrier.h>
+#include <os/barrier.h>
 #include <handles/global.h>
 #include <handles/handle.h>
 #include <debug.h>

@@ -29,7 +29,7 @@
 #include <arch/x86/arch.h>
 #include <arch/x86/apic.h>
 #include <arch/x86/cpu.h>
-#include <ddk/ddkdefs.h>
+#include <os/tls.h>
 #include <threading.h>
 #include <interrupts/interrupts.h>
 #include <debug.h>

@@ -21,43 +21,7 @@
 #define __DDK_FIRMWARE_H__
 
 #include <ddk/ddkdefs.h>
-
-enum OSFirmwareSource {
-    OSFIRMWARE_NONE       = 0x0,
-    OSFIRMWARE_ACPI       = 0x1,
-    OSFIRMWARE_DEVICETREE = 0x2
-};
-
-typedef struct OSFirmwareInfo {
-    // Bitmask of enum OSFirmwareSource values present on this system
-    unsigned int Available;
-    // The source the kernel used to describe the platform
-    unsigned int Primary;
-    struct {
-        // (FADT major << 4) | FADT minor, matches ACPI_VERSION_*
-        uint8_t  Revision;
-        uint8_t  Century;
-        uint16_t IaBootFlags;
-        uint16_t ArmBootFlags;
-    } Acpi;
-    struct {
-        uint32_t Size;
-    } DeviceTree;
-} OSFirmwareInfo_t;
-
-typedef struct OSFirmwareTableKey {
-    unsigned int Source;
-    // ACPI table signature, ignored for the DeviceTree
-    char         Signature[4];
-    // Zero-based instance for tables that may repeat (SSDT), must be 0 for the DeviceTree
-    unsigned int Instance;
-} OSFirmwareTableKey_t;
-
-typedef struct OSFirmwareTable {
-    size_t   Length;
-    // ACPI header revision, or the FDT format version
-    uint32_t Revision;
-} OSFirmwareTable_t;
+#include <os/types/firmware.h>
 
 _CODE_BEGIN
 

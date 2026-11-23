@@ -19,7 +19,8 @@
  */
 
 #include <component/ic.h>
-#include <ddk/io.h>
+#include <os/types/deviceio.h>
+#include <os/volatile.h>
 #include <heap.h>
 #include <interrupts/interrupts.h>
 #include <debug.h>

@@ -17,9 +17,9 @@
  * Reserve, bind, and release interrupt vectors as a group.
  */
 
-#include <ddk/types/interrupt-controller.h>
-#include <ddk/types/interrupt-group.h>
-#include <ddk/types/interrupt-bus.h>
+#include <os/types/interrupt_controller.h>
+#include <os/types/interrupt_group.h>
+#include <os/types/interrupt_bus.h>
 #include <string.h>
 
 #include <interrupts/group.h>

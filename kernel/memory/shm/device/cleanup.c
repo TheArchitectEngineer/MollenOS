@@ -21,7 +21,7 @@
 
 #include <assert.h>
 #include <debug.h>
-#include <ddk/barrier.h>
+#include <os/barrier.h>
 #include <limits.h>
 #include <handles/global.h>
 #include <heap.h>

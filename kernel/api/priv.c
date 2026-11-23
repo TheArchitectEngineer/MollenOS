@@ -26,15 +26,15 @@
 // This header must appear before the DDK's standalone ACPI subset to
 // avoid conflicting platform macros.
 #include <acpiinterface.h>
-#include <ddk/pci/acpi.h>
+#include <os/types/acpi_pci.h>
 #ifdef __OSCONFIG_ACPI_SUPPORT
 #include "../acpi/pci.h"
 #endif
 
-#include <ddk/types/interrupt-controller.h>
-#include <ddk/types/interrupt-group.h>
-#include <ddk/types/interrupt.h>
-#include <ddk/acpi.h>
+#include <os/types/interrupt_controller.h>
+#include <os/types/interrupt_group.h>
+#include <os/types/interrupt.h>
+#include <os/types/acpi_pci.h>
 #include <string.h>
 
 #include <arch/utils.h>

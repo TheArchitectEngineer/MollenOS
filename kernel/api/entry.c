@@ -20,13 +20,13 @@
 //#define __TRACE
 
 #include <assert.h>
-#include <ddk/types/capabilities.h>
-#include <ddk/types/interrupt-controller.h>
-#include <ddk/types/interrupt-group.h>
-#include <ddk/acpi.h>
-#include <ddk/firmware.h>
-#include <ddk/video.h>
-#include <ddk/io.h>
+#include <os/types/capabilities.h>
+#include <os/types/interrupt_controller.h>
+#include <os/types/interrupt_group.h>
+#include <os/types/acpi_pci.h>
+#include <os/types/firmware.h>
+#include <os/types/video.h>
+#include <os/types/deviceio.h>
 #include <os/futex.h>
 #include <os/types/grants.h>
 #include <os/types/dma_region.h>
@@ -35,6 +35,7 @@
 #include <os/types/memory.h>
 #include <os/types/time.h>
 #include <os/types/syscall.h>
+#include <os/types/query.h>
 
 #include <arch/thread.h>
 #include <arch/utils.h>

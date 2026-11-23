@@ -22,7 +22,7 @@
 
 #include <shm/region_usage.h>
 #include <assert.h>
-#include <ddk/barrier.h>
+#include <os/barrier.h>
 #include <debug.h>
 #include <limits.h>
 #include <string.h>

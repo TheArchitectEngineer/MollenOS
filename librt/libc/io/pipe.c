@@ -18,7 +18,7 @@
 //#define __TRACE
 
 #include <assert.h>
-#include <ddk/utils.h>
+#include <os/syslog.h>
 #include <ds/streambuffer.h>
 #include <errno.h>
 #include <internal/_io.h>
@@ -28,6 +28,7 @@
 #include <os/handle.h>
 #include <os/notification_queue.h>
 #include <os/shm.h>
+#include <os/mollenos.h>
 #include <string.h>
 #include <stdlib.h>
 

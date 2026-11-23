@@ -20,7 +20,7 @@
 #define __need_static_assert
 #include "private.h"
 
-#include <ddk/barrier.h>
+#include <os/barrier.h>
 #include <ddk/utils.h>
 #include <os/handle.h>
 #include <os/types/storage.h>

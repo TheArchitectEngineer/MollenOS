@@ -27,7 +27,7 @@
 #include <arch/x86/cmos.h>
 #include <arch/interrupts.h>
 #include <debug.h>
-#include <ddk/io.h>
+#include <os/types/deviceio.h>
 #include <hpet.h>
 #include <interrupts/interrupts.h>
 #include <machine.h>

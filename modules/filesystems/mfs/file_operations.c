@@ -15,7 +15,7 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-#define __TRACE
+//#define __TRACE
 #define __need_minmax
 #include <ddk/utils.h>
 #include <fs/common.h>
@@ -25,7 +25,11 @@
 
 oserr_t FsSeekInFile(FileSystemMFS_t*, MFSEntry_t*, uint64_t);
 
-// Returns whether the data bucket of entry holds the byte at position.
+// Returns whether the data bucket of entry holds the byte at position. It uses
+// the handle's copy of the run length, which may be shorter than the run is
+// in the bucket map (see MFSEntry_t in mfs.h). A false answer only sends
+// __SeekToBucketOfPosition to FsSeekInFile, which reads the length from the
+// map, so a run that grew is still found.
 static bool
 __BucketHoldsPosition(
         _In_ FileSystemMFS_t* mfs,
@@ -50,13 +54,16 @@ __BucketHoldsPosition(
 // - FsSeekInFile went past the last bucket of the file. It stops at that
 //   bucket, and the position lies past its end. A write or a truncate may
 //   since have given the file the bucket of the position.
-// - The position is at the end of the data bucket.
-// The seek is then done again, which walks the bucket map from the first
-// bucket of the file. The caller makes sure the file has a bucket for the
-// position: a read checks the size of the file, and a write calls
-// MfsEnsureRecordSpace first. If the seek still finds no bucket, the entry and
-// the bucket map do not agree. OS_EDEVFAULT is returned then, so nothing is
-// read or written outside the file.
+// - The position is at the end of the data bucket, as the handle's copy of
+//   the run length gives it. A write at the end of the file is the common
+//   case. The run may have grown, or the file may have a new run after it.
+// The seek is then done again. It walks the bucket map from the data bucket
+// when the position lies at or after its start, and from the first bucket of
+// the file otherwise (see FsSeekInFile). The caller makes sure the file has a
+// bucket for the position: a read checks the size of the file, and a write
+// calls MfsEnsureRecordSpace first. If the seek still finds no bucket, the
+// entry and the bucket map do not agree. OS_EDEVFAULT is returned then, so
+// nothing is read or written outside the file.
 static oserr_t
 __SeekToBucketOfPosition(
         _In_ FileSystemMFS_t* mfs,
@@ -605,7 +612,12 @@ FsSeekInFile(
         _In_ MFSEntry_t*      entry,
         _In_ uint64_t         absolutePosition)
 {
-    size_t initialBucketMax;
+    size_t      bucketSizeBytes = mfs->SectorsPerBucket * mfs->SectorSize;
+    bucket_t    bucket;
+    uint64_t    runStart;
+    uint64_t    runEnd;
+    MapRecord_t run;
+    oserr_t     oserr;
 
     TRACE("FsSeekInFile(name=%ms, position=0x%x)", entry->Name, LODWORD(absolutePosition));
 
@@ -626,83 +638,46 @@ FsSeekInFile(
         return OS_EOK;
     }
 
-    // Step 1, if the new position is in
-    // initial bucket, we need to do no actual seeking
-    initialBucketMax = (entry->StartLength * (mfs->SectorsPerBucket * mfs->SectorSize));
-    if (absolutePosition < initialBucketMax) {
-        entry->DataBucketPosition = entry->StartBucket;
-        entry->DataBucketLength   = entry->StartLength;
-        entry->BucketByteBoundary = 0;
+    // Where the walk starts. The runs of the chain only link forward, so a
+    // position before the data bucket is found by walking from the first
+    // bucket. A position at or after the start of the data bucket is found by
+    // walking on from the data bucket. This makes the common cases cheap: a
+    // read or write that goes on where the last one ended, and a write at the
+    // end of the file, which __SeekToBucketOfPosition sends here once the file
+    // has a new run. Both cost one or two map lookups, however long the file is.
+    if (entry->DataBucketPosition != MFS_ENDOFCHAIN && absolutePosition >= entry->BucketByteBoundary) {
+        bucket   = entry->DataBucketPosition;
+        runStart = entry->BucketByteBoundary;
     } else {
-        // Step 2. We might still get out easy
-        // if we are setting a new position that's 
-        // within the current bucket
-        uint64_t OldBucketLow, OldBucketHigh;
-
-        // Calculate bucket boundaries
-        OldBucketLow  = entry->BucketByteBoundary;
-        OldBucketHigh = OldBucketLow + (entry->DataBucketLength
-                                        * (mfs->SectorsPerBucket * mfs->SectorSize));
-
-        // If we are seeking inside the same bucket no need
-        // to do anything else
-        if (absolutePosition >= OldBucketLow && absolutePosition < OldBucketHigh) {
-            // Same bucket
-        } else {
-            // We need to figure out which bucket the position is in
-            uint64_t    PositionBoundLow  = 0;
-            uint64_t    PositionBoundHigh = initialBucketMax;
-            MapRecord_t Link;
-
-            // Start at the file-bucket
-            uint32_t BucketPtr    = entry->StartBucket;
-            uint32_t BucketLength = entry->StartLength;
-            while (1) {
-                // Check if we reached correct bucket
-                TRACE("[mfs] [seek] are we there yeti? [%llu-%llu]/%llu",
-                      PositionBoundLow, PositionBoundLow + PositionBoundHigh, absolutePosition);
-                
-                // Check termination conditions
-                if (absolutePosition >= PositionBoundLow && absolutePosition < (PositionBoundLow + PositionBoundHigh)) {
-                    break;
-                }
-
-                // Get link
-                if (MFSBucketMapGetLengthAndLink(mfs, BucketPtr, &Link) != OS_EOK) {
-                    ERROR("FsSeekInFile failed to get link for bucket %u", BucketPtr);
-                    return OS_EDEVFAULT;
-                }
-
-                // If we do reach end of chain, then we handle this case by setting
-                // the pointer to the wished destination, and store the last indices
-                if (Link.Link == MFS_ENDOFCHAIN) {
-                    WARNING("[mfs] [seek] seeking beyond eof [%llu-%llu]/%llu",
-                            PositionBoundLow, PositionBoundLow + PositionBoundHigh, absolutePosition);
-                    break;
-                }
-                
-                BucketPtr = Link.Link;
-
-                // Get length of link
-                if (MFSBucketMapGetLengthAndLink(mfs, BucketPtr, &Link) != OS_EOK) {
-                    ERROR("Failed to get length for bucket %u", BucketPtr);
-                    return OS_EDEVFAULT;
-                }
-                BucketLength = Link.Length;
-
-                // Calculate bounds for the new bucket
-                PositionBoundLow += PositionBoundHigh;
-                PositionBoundHigh = (BucketLength * (mfs->SectorsPerBucket * mfs->SectorSize));
-            }
-
-            // Update handle positioning
-            entry->DataBucketPosition = BucketPtr;
-            entry->DataBucketLength   = BucketLength;
-            entry->BucketByteBoundary = PositionBoundLow;
-        }
+        bucket   = entry->StartBucket;
+        runStart = 0;
     }
-    
-    // Update the new position since everything went ok
+
+    // The length of each run, the first one too, is read from the bucket map.
+    // The handle's copies may be shorter than the run is now (see MFSEntry_t
+    // in mfs.h). The walk stops at the run that holds the position, or at the
+    // last run when the position lies past the end of the file.
+    while (1) {
+        oserr = MFSBucketMapGetLengthAndLink(mfs, bucket, &run);
+        if (oserr != OS_EOK) {
+            ERROR("FsSeekInFile failed to get the run of bucket %u in %ms: %u", bucket, entry->Name, oserr);
+            return OS_EDEVFAULT;
+        }
+
+        runEnd = runStart + ((uint64_t)run.Length * bucketSizeBytes);
+        if (absolutePosition < runEnd) {
+            break;
+        }
+        if (run.Link == MFS_ENDOFCHAIN) {
+            WARNING("FsSeekInFile position %u lies past the last run of %ms, which ends at %u",
+                    LODWORD(absolutePosition), entry->Name, LODWORD(runEnd));
+            break;
+        }
+        bucket   = run.Link;
+        runStart = runEnd;
+    }
+
+    MFSEntrySetDataRun(entry, bucket, run.Length, runStart);
     entry->Position = absolutePosition;
     return OS_EOK;
 }

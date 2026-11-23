@@ -32,7 +32,7 @@
 #include <ds/list.h>
 #include <os/types/handle.h>
 #include <ddk/dma.h>
-#include <ddk/barrier.h>
+#include <os/barrier.h>
 #include <os/spinlock.h>
 
 // SATA includes

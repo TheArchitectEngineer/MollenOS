@@ -24,7 +24,7 @@
 #include <assert.h>
 #include <ddk/service.h>
 #include <ddk/utils.h>
-#include <ddk/barrier.h>
+#include <os/barrier.h>
 #include <ds/hashtable.h>
 #include <event.h>
 #include "hci.h"

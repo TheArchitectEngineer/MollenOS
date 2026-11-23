@@ -20,7 +20,7 @@
 #include <internal/_syscalls.h>
 #include <os/handle.h>
 #include <os/spinlock.h>
-#include <ddk/utils.h>
+#include <os/syslog.h>
 #include <string.h>
 
 struct __LocalHandle {

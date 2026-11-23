@@ -17,7 +17,7 @@
  */
 //#define __TRACE
 
-#include <ddk/utils.h>
+#include <os/syslog.h>
 #include <strings.h>
 #include <string.h>
 #include <errno.h>

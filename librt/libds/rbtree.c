@@ -17,7 +17,7 @@
 
 #include <assert.h>
 #include <errno.h>
-#include <ddk/barrier.h>
+#include <os/barrier.h>
 #include <ds/rbtree.h>
 #include <string.h>
 

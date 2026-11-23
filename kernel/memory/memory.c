@@ -18,12 +18,15 @@
  *   - Implements helpers and utility functions with the MemoryInitialize.
  */
 
-//#define __TRACE
+#define __TRACE
+
 #define __need_quantity
 #define __need_minmax
 #include <assert.h>
 #include <arch/mmu.h>
-#include <ddk/io.h>
+#include <os/types/deviceio.h>
+#include <os/volatile.h>
+#include <os/tls.h>
 #include <debug.h>
 #include <component/memory.h>
 #include <heap.h>

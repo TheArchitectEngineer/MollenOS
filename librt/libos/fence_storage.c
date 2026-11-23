@@ -18,7 +18,7 @@
 //#define __TRACE
 
 #include "fence_private.h"
-#include <ddk/utils.h>
+#include <os/syslog.h>
 #include <time.h>
 #include <internal/_tls.h>
 #include <os/futex.h>

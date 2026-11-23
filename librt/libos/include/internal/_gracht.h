@@ -10,7 +10,7 @@
 #ifndef __OS_INTERNAL_GRACHT_H__
 #define __OS_INTERNAL_GRACHT_H__
 
-#include <ddk/utils.h>
+#include <os/syslog.h>
 #include <errno.h>
 #include <gracht/client.h>
 #include <os/osdefs.h>

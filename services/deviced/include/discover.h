@@ -26,7 +26,7 @@
 #include <os/osdefs.h>
 #include <ds/mstring.h>
 #include <ds/list.h>
-#include <ddk/types/capabilities.h>
+#include <os/types/capabilities.h>
 
 struct DriverProduct {
     element_t ListHeader;
@@ -51,19 +51,60 @@ struct DriverCompatible {
     char*     Name;
 };
 
+// Most clock routes one driver manifest may declare.
+#define DRIVER_MAX_CLOCK_ROUTES           4
+
+// Most entries of "controller-compatibles" one driver manifest may declare.
+#define DRIVER_MAX_CONTROLLER_COMPATIBLES 4
+
+// Longest compatible string of the controller keys, including its terminator.
+#define DRIVER_CONTROLLER_COMPATIBLE_MAX  64
+
+/**
+ * @brief One entry of the manifest key "clock-routes".
+ *
+ * Consumers name a clock as cell Clock of the enabled firmware node whose
+ * compatible list holds Compatible. The driver controls the same clock as its
+ * own clock number ControllerClock.
+ */
+struct DriverClockRoute {
+    char     Compatible[DRIVER_CONTROLLER_COMPATIBLE_MAX];
+    uint32_t Clock;
+    uint32_t ControllerClock;
+};
+
+/**
+ * @brief The manifest keys deviced uses when the driver enables its device as
+ * a GPIO or clock controller (DeviceControllerEnable).
+ *
+ * Compatibles holds CompatibleCount entries of "controller-compatibles": when
+ * there are any, a child of a client node is a controller node of the device
+ * only when its compatible list holds one of them. ClockRoutes holds
+ * ClockRouteCount entries of "clock-routes". Both live in the trusted
+ * manifest, so a driver can never name nodes or clocks itself.
+ */
+struct DriverControllerManifest {
+    uint32_t                CompatibleCount;
+    char                    Compatibles[DRIVER_MAX_CONTROLLER_COMPATIBLES][DRIVER_CONTROLLER_COMPATIBLE_MAX];
+    uint32_t                ClockRouteCount;
+    struct DriverClockRoute ClockRoutes[DRIVER_MAX_CLOCK_ROUTES];
+};
+
 /**
  * @brief Driver matching data, resources and requested initial capabilities
  * parsed from trusted installed driver configuration.
  * The configuration owns the entries in Vendors, Compatibles and Resources,
- * including the product lists and compatible strings.
+ * including the product lists and compatible strings. Controller holds the
+ * keys "controller-compatibles" and "clock-routes".
  */
 struct DriverConfiguration {
-    Capabilities_t Capabilities;
-    uint32_t       Class;
-    uint32_t       Subclass;
-    list_t         Vendors;
-    list_t         Compatibles;
-    list_t         Resources;
+    Capabilities_t                  Capabilities;
+    uint32_t                        Class;
+    uint32_t                        Subclass;
+    list_t                          Vendors;
+    list_t                          Compatibles;
+    list_t                          Resources;
+    struct DriverControllerManifest Controller;
 };
 
 /**
@@ -111,6 +152,38 @@ __EXTERN unsigned int
 DmDriverMatchScore(
     _In_ const struct DriverConfiguration*  configuration,
     _In_ const struct DriverIdentification* identification);
+
+/**
+ * @brief Checks whether any known driver configuration matches a device.
+ * Nothing is started or queued. Takes the driver list lock, so the caller
+ * must not hold a lock that the driver list code takes after it.
+ *
+ * @param identification The identifiers used to find a match.
+ * @return Nonzero when at least one known driver matches.
+ */
+__EXTERN int
+DmDiscoverHasDriver(
+    _In_ const struct DriverIdentification* identification);
+
+/**
+ * @brief Copy the controller keys from the manifest of the driver with this
+ * service endpoint.
+ *
+ * The endpoint is the one a device record holds for its assigned driver
+ * (DmDeviceGetDriver). Only drivers that reported their endpoint are found.
+ * Takes only a lock that is never held while another lock is taken, so it may
+ * be called with the DMA lock and a bus lock held. The manifest of a started
+ * driver never changes, so the copy stays correct.
+ *
+ * @param driverHandle Service endpoint of the driver.
+ * @param manifest Receives the copy. Unchanged on failure.
+ * @return OS_EOK, OS_EINVALPARAMS for a missing pointer, or OS_ENOENT when no
+ *         started driver has this endpoint.
+ */
+__EXTERN oserr_t
+DmDiscoverControllerManifest(
+    _In_  uuid_t                           driverHandle,
+    _Out_ struct DriverControllerManifest* manifest);
 
 /**
  * @brief Removes a device from the device lists maintained for drivers.

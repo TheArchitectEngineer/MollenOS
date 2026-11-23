@@ -47,7 +47,11 @@
 #include <threading.h>
 #include <userevent.h>
 
+#if defined(VALI_ARM64_SMMU_SELFTEST)
+#include "native.h"
+#else
 extern void SpawnBootstrapper(void);
+#endif
 
 static SystemMachine_t g_machine = {
     { 0 }, { 0 }, { 0 },                        // Strings
@@ -255,8 +259,17 @@ InitializeMachine(
     // Initialize all userspace subsystems here
     UserEventInitialize();
 
+#if defined(VALI_ARM64_SMMU_SELFTEST)
+    // The native SMMUv3 boot test runs instead of userspace. It only queues
+    // a kernel thread here, since its DMA calls need the scheduler running.
+    oserr = ArmSMMUSelfTestStart();
+    if (oserr != OS_EOK) {
+        FATAL(FATAL_SCOPE_KERNEL, "SMMU-SELFTEST FAIL step=thread-create status=%u", oserr);
+    }
+#else
     // Start the bootstrap module if present
     SpawnBootstrapper();
+#endif
 
     // yield before going to assume new threads
     TRACE("End of initialization, yielding control");

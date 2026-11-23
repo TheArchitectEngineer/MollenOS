@@ -21,7 +21,7 @@
 #include <assert.h>
 #include <ddk/service.h>
 #include <ddk/convert/grants.h>
-#include <ddk/utils.h>
+#include <os/syslog.h>
 #include <errno.h>
 #include <gracht/link/vali.h>
 #include <internal/_io.h>
@@ -38,6 +38,7 @@
 #include <os/usched/xunit.h>
 #include <os/usched/job.h>
 #include <os/usched/usched.h>
+#include <os/mollenos.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys_process_service_client.h>

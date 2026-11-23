@@ -18,7 +18,7 @@
 #define __need_minmax
 #define __TRACE
 
-#include <ddk/barrier.h>
+#include <os/barrier.h>
 #include <ddk/io.h>
 #include <ddk/utils.h>
 #include <os/shm.h>

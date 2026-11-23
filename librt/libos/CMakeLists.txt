@@ -18,6 +18,7 @@ add_library(libos STATIC
     handle_provider.c
     ipc.c
     memory.c
+    memory_space.c
     notification_queue.c
     sha1.c
     shm.c
@@ -25,9 +26,11 @@ add_library(libos STATIC
     shm_region.c
     spinlock.c
     syscalls.c
+    syslog.c
     system.c
     time.c
     unwind.c
+    volatile.c
 )
 target_include_directories(libos PUBLIC
         include

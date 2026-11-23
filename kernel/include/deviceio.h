@@ -25,7 +25,8 @@
 #ifndef __VALI_IOSPACE_H__
 #define __VALI_IOSPACE_H__
 
-#include <ddk/io.h>
+#include <os/types/deviceio.h>
+#include <os/volatile.h>
 #include <os/osdefs.h>
 
 /* RegisterSystemDeviceIo

@@ -21,10 +21,10 @@
 
 #include <os/types/syscall.h>
 #include <internal/_syscalls.h>
-#include <ddk/memory.h>
+#include <os/memory_space.h>
 
 oserr_t
-CreateMemorySpace(
+OSMemorySpaceCreate(
     _In_  unsigned int flags,
     _Out_ uuid_t*      msHandleOut,
     _Out_ uuid_t*      securityHandleOut)
@@ -49,7 +49,7 @@ CreateMemorySpace(
 }
 
 oserr_t
-GetMemorySpaceForThread(
+OSMemorySpaceGetForThread(
     _In_  uuid_t  thread,
     _Out_ uuid_t* handleOut)
 {
@@ -60,7 +60,7 @@ GetMemorySpaceForThread(
 }
 
 oserr_t
-CreateMemoryMapping(
+OSMemorySpaceCreateMapping(
     _In_  uuid_t                          handle,
     _In_  struct MemoryMappingParameters* parameters,
     _Out_ void**                          addressOut)

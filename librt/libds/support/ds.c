@@ -35,7 +35,7 @@
 
 #else
 #include <os/futex.h>
-#include <ddk/utils.h>
+#include <os/syslog.h>
 #include <stdlib.h>
 #include <stdio.h>
 #endif

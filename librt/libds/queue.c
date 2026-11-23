@@ -21,7 +21,7 @@
  */
 
 #include <assert.h>
-#include <ddk/io.h>
+#include <os/volatile.h>
 #include <ds/queue.h>
 
 #define QUEUE_LOCK   SYNC_LOCK(queue)

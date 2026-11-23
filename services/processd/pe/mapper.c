@@ -19,7 +19,7 @@
 #define __need_minmax
 #include <assert.h>
 #include <ds/mstring.h>
-#include <ddk/memory.h>
+#include <os/memory_space.h>
 #include <ddk/utils.h>
 #include <os/memory.h>
 #include <string.h>
@@ -36,7 +36,7 @@ __CreateMapping(
     Parameters.VirtualAddress = mapping->MappedAddress;
     Parameters.Length         = mapping->Length;
     Parameters.Flags          = mapping->Flags;
-    return CreateMemoryMapping(
+    return OSMemorySpaceCreateMapping(
             memorySpaceHandle,
             &Parameters,
             (void**)&mapping->LocalAddress

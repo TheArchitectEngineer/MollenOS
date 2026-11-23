@@ -18,7 +18,7 @@
 
 //#define __TRACE
 
-#include <ddk/utils.h>
+#include <os/syslog.h>
 #include <os/fence_pool.h>
 #include <limits.h>
 #include <stdint.h>

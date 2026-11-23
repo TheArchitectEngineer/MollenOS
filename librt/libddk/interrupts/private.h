@@ -19,7 +19,7 @@
 #define __DDK_INTERRUPT_PRIVATE_H__
 
 #include <ddk/interrupts/interrupt.h>
-#include <ddk/types/interrupt-group.h>
+#include <os/types/interrupt_group.h>
 
 /**
  * Requests sent to the bus driver that programs the interrupts of the device.

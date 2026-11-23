@@ -21,7 +21,7 @@
 
 #include <ds/mstring.h>
 #include <gracht/server.h>
-#include <ddk/types/capabilities.h>
+#include <os/types/capabilities.h>
 #include <ddk/service-caller.h>
 #include <os/services/process.h>
 #include <os/types/handle.h>

@@ -23,7 +23,7 @@
 #ifndef __DDK_CAPABILITIES_H__
 #define __DDK_CAPABILITIES_H__
 
-#include <ddk/types/capabilities.h>
+#include <os/types/capabilities.h>
 #include <ddk/ddkdefs.h>
 
 /**

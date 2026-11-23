@@ -19,11 +19,11 @@
  * Device drivers use interrupt.h without handling the bus callbacks.
  */
 
-#ifndef __DDK_TYPES_INTERRUPT_BUS_H__
-#define __DDK_TYPES_INTERRUPT_BUS_H__
+#ifndef __OS_TYPES_INTERRUPT_BUS_H__
+#define __OS_TYPES_INTERRUPT_BUS_H__
 
-#include <ddk/types/interrupt.h>
-#include <ddk/types/interrupt-controller.h>
+#include <os/types/interrupt.h>
+#include <os/types/interrupt_controller.h>
 
 #define INTERRUPT_BUS_MAX_VECTORS 2048U
 
@@ -86,4 +86,4 @@ typedef struct InterruptBusAttachRequest {
     uint32_t                        LineFlags;
 } InterruptBusAttachRequest_t;
 
-#endif //!__DDK_TYPES_INTERRUPT_BUS_H__
+#endif //!__OS_TYPES_INTERRUPT_BUS_H__

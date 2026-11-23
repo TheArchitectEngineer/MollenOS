@@ -19,7 +19,7 @@
 //#define __DIAGNOSE
 #define __need_minmax
 #include <ddk/utils.h>
-#include <ddk/barrier.h>
+#include <os/barrier.h>
 #include <limits.h>
 #include "uhci.h"
 

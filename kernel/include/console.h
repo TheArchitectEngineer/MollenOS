@@ -25,7 +25,7 @@
 #define __CONSOLE_INTERFACE_H__
 
 #include <os/osdefs.h>
-#include <ddk/video.h>
+#include <os/types/video.h>
 
 /* InitializeFramebufferOutput (@arch)
  * Initializes the video framebuffer of the operating system. This enables visual rendering

@@ -16,7 +16,7 @@
  *
  */
 
-#include <ddk/types/interrupt.h>
+#include <os/types/interrupt.h>
 #include "tables.h"
 
 oserr_t

@@ -25,29 +25,7 @@
 #define __DDK_VIDEO_H__
 
 #include <ddk/ddkdefs.h>
-
-enum OSBootVideoType {
-    OSBOOTVIDEO_NONE,
-    OSBOOTVIDEO_TTY,
-    OSBOOTVIDEO_FRAMEBUFFER
-};
-
-typedef struct VideoColorComponent {
-    uint8_t  Position;
-    uint32_t Mask;
-} VideoColorComponent_t;
-
-typedef struct OSBootVideoDescriptor {
-    enum OSBootVideoType  Type;
-    size_t                BytesPerScanline;
-    size_t                Height;
-    size_t                Width;
-    int                   DepthBits;
-    VideoColorComponent_t Red;
-    VideoColorComponent_t Green;
-    VideoColorComponent_t Blue;
-    VideoColorComponent_t Alpha;
-} OSBootVideoDescriptor_t;
+#include <os/types/video.h>
 
 _CODE_BEGIN
 

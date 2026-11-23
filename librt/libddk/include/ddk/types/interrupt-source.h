@@ -18,7 +18,7 @@
 #ifndef __DDK_TYPES_INTERRUPT_SOURCE_H__
 #define __DDK_TYPES_INTERRUPT_SOURCE_H__
 
-#include <ddk/types/interrupt.h>
+#include <os/types/interrupt.h>
 
 /**
  * OSIOCTLREQUEST_INTERRUPT_QUERY selects one source from a platform device's

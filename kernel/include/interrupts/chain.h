@@ -23,7 +23,7 @@
 #ifndef __INTERRUPTS_CHAIN_H__
 #define __INTERRUPTS_CHAIN_H__
 
-#include <ddk/interrupts/interrupt.h>
+#include <os/types/interrupt.h>
 
 struct InterruptBusHandler;
 

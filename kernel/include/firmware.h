@@ -21,7 +21,7 @@
 #define __FIRMWARE_H__
 
 #include <os/osdefs.h>
-#include <ddk/firmware.h>
+#include <os/types/firmware.h>
 
 /**
  * @brief Fills <infoOut> with the firmware sources known to the kernel.

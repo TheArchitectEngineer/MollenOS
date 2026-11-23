@@ -19,7 +19,7 @@
 #ifndef __VALI_INTERRUPT_TYPES_H__
 #define __VALI_INTERRUPT_TYPES_H__
 
-#include <ddk/types/interrupt.h>
+#include <os/types/interrupt.h>
 
 // Group handles end in these ten bits. Dispatch slots with this suffix must
 // remain unavailable, including when an architecture adds software-only slots.
