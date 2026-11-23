@@ -34,4 +34,4 @@ typedef struct UsbDevice {
     usb_device_context_t DeviceContext;
 } UsbDevice_t;
 
-#endif
+#endif //!__DDK_USBDEVICE_H__

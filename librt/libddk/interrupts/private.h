@@ -21,58 +21,114 @@
 #include <ddk/interrupts/interrupt.h>
 #include <ddk/types/interrupt-group.h>
 
-enum __InterruptProviderOperation {
-    InterruptProviderReserve,
-    InterruptProviderEnable,
-    InterruptProviderDisable,
-    InterruptProviderRelease
+/**
+ * Requests sent to the bus driver that programs the interrupts of the device.
+ * This is the PCI bus for PCI devices, and the platform bus for devices that
+ * are described by firmware. interrupt.c and pci.c translate each request into
+ * the ioctl format of that bus.
+ */
+enum __InterruptBusRequest {
+    // Set aside the interrupts on the device, without starting delivery.
+    InterruptBusRequestReserve,
+    // Let the device deliver its interrupts.
+    InterruptBusRequestEnable,
+    // Stop the device from delivering interrupts.
+    InterruptBusRequestDisable,
+    // Give back what Reserve set aside.
+    InterruptBusRequestRelease
 };
 
+/**
+ * Where an allocation is between DeviceInterruptAllocate and the end of
+ * DeviceInterruptDestroy. It only moves forward.
+ */
 enum __InterruptPhase {
-    // Ownership may exist, but setup has not completed and cannot be enabled.
+    // Allocation is still running. The interrupt can not be enabled yet.
     InterruptPhasePreparing,
-    // Configuration/delivery may be changed after any pending stop completes.
+    // Allocation succeeded. Handlers and resources can be set, and delivery
+    // can be enabled and disabled.
     InterruptPhaseReady,
-    // Terminal teardown: only Disable/Destroy may advance the object.
+    // DeviceInterruptDestroy has started. Only Disable and Destroy are allowed
+    // from here, even after a Disable succeeds.
     InterruptPhaseDestroying
 };
 
 /**
- * Independent cleanup obligations for one allocation. ProviderReserved is set
- * before RPC because a lost reply can conceal ownership. Bound includes partial
- * mappings; Enabled records successful kernel enable, not confirmed hardware
- * delivery. PendingCleanup prevents cached state from bypassing a failed stop.
- * PciMode is interpreted only by interrupt-pci.c; PlatformSource selects the
- * native source protocol without giving that source a fictitious PCI mode.
- *
- * Invariants at public-call boundaries:
- * - Enabled implies Bound; either may conservatively remain set after failure.
- * - Bound without Enabled implies PendingCleanup (including partial binding).
- * - Only Ready with no mappings or pending cleanup permits resource edits.
- * - Destroying never returns to Ready, even after a successful stop.
- * - Only successful kernel stop/unmap clears Bound and Enabled. PendingCleanup
- *   clears after that stop or after complete kernel/provider enable succeeds.
- * - ProviderReserved clears only on untouched Reserve/EBUSY or successful Release.
+ * Whether the bus driver has set interrupts aside for this allocation.
  */
-struct DeviceInterruptState {
-    uuid_t                Handle;
-    int                   Bound;
-    int                   Enabled;
-    int                   ProviderReserved;
-    uint32_t              PciMode;
-    enum __InterruptPhase Phase;
-    int                   PendingCleanup;
-    int                   PlatformSource;
+enum __InterruptBusReservation {
+    // The bus driver holds nothing for this allocation.
+    InterruptBusReservationNone,
+    // The bus driver holds a reservation, or may hold one. This is set before
+    // the reserve request is sent, because a lost reply does not tell whether
+    // the bus driver made the reservation. It is only cleared when the bus
+    // driver answers OS_EBUSY to the reserve request, which means it changed
+    // nothing, or when a release request succeeds.
+    InterruptBusReservationHeld
 };
 
 /**
- * @brief Common allocation/rollback entry for generic and PCI public APIs.
- * @param interrupt Initialized descriptor; must not already own an allocation.
- * @param minimum Minimum acceptable vector count.
- * @param optimal Preferred count, at least minimum.
- * @param pciModes Opaque PCI policy passed to the PCI module; unused for lines.
- * @param countOut Actual count on success; zero on failure.
- * @return Setup status; failed rollback retains State for Destroy.
+ * How far delivery has been set up, and whether a stop still has to finish.
+ *
+ * Every state except Stopped and Enabled means that cleanup is still needed.
+ * DeviceInterruptEnable finishes that cleanup before it binds handlers again,
+ * and handlers or resources can only be changed in the Stopped state.
+ */
+enum __InterruptDelivery {
+    // No handler is bound in the kernel and no stop is waiting to finish.
+    InterruptDeliveryStopped,
+    // No handler is bound in the kernel, but a stop has started and has not
+    // finished. This happens when the bus driver fails a disable request.
+    InterruptDeliveryStopPending,
+    // Handlers are bound in the kernel, or some may be left bound after a
+    // failed bind. The kernel has not enabled delivery.
+    InterruptDeliveryBound,
+    // The kernel has enabled delivery, but the bus driver has not confirmed
+    // its side. Either its enable request is not answered yet, or a stop has
+    // started and has not finished.
+    InterruptDeliveryKernelEnabled,
+    // The kernel and the bus driver have both confirmed delivery.
+    InterruptDeliveryEnabled
+};
+
+/**
+ * Bookkeeping for one interrupt allocation. It is created by
+ * DeviceInterruptAllocate and freed by DeviceInterruptDestroy. When a cleanup
+ * step fails the structure is kept, so the driver can call Disable or Destroy
+ * again to finish the cleanup.
+ */
+struct DeviceInterruptState {
+    // Kernel handle of the allocation.
+    uuid_t                         Handle;
+    // See enum __InterruptPhase.
+    enum __InterruptPhase          Phase;
+    // See enum __InterruptDelivery.
+    enum __InterruptDelivery       Delivery;
+    // See enum __InterruptBusReservation.
+    enum __InterruptBusReservation BusReservation;
+    // The INTERRUPT_STRATEGY_* value chosen for a PCI device. Only pci.c
+    // reads it. Zero for every other device.
+    uint32_t                       PciMode;
+    // Nonzero when the interrupt was looked up by its firmware source index.
+    // Bus requests then go to the platform bus instead of the PCI bus.
+    int                            PlatformSource;
+};
+
+/**
+ * @brief Shared allocation path of DeviceInterruptAllocate and
+ * DeviceInterruptAllocatePci. Reserves the interrupts with the kernel and the
+ * bus driver, and undoes both when a step fails.
+ *
+ * @param interrupt Initialized interrupt without an allocation.
+ * @param minimum   Lowest number of vectors the driver can work with.
+ * @param optimal   Number of vectors the driver would like, at least minimum.
+ * @param pciModes  INTERRUPT_STRATEGY_* values the driver accepts. Only used
+ *                  for PCI devices.
+ * @param countOut  Receives the number of vectors on success, and zero on
+ *                  failure.
+ * @return OS_EOK on success. On failure the error of the failed step is
+ *         returned. If undoing the allocation failed as well, the state is
+ *         kept on the interrupt so DeviceInterruptDestroy can be called again.
  */
 oserr_t
 __InterruptAllocate(
@@ -83,14 +139,17 @@ __InterruptAllocate(
     _Out_   uint32_t*          countOut);
 
 /**
- * @brief Select a PCI mode and reserve its kernel resources without delivery.
- * @param interrupt PCI descriptor providing device identity and INTx routing.
- * @param minimum Minimum acceptable vector count.
- * @param optimal Preferred vector count.
- * @param modes Permitted PCI capability modes.
- * @param result Kernel reservation returned on success.
- * @param selectedMode Selected PCI capability, returned only on success.
- * @return OS_EOK or reservation/query error; no provider ownership acquired.
+ * @brief Picks MSI-X, MSI or the legacy interrupt line for a PCI device and
+ * reserves the vectors in the kernel. Nothing is requested from the PCI bus
+ * yet, and delivery stays off.
+ *
+ * @param interrupt    PCI interrupt. Supplies the device and the legacy line.
+ * @param minimum      Lowest number of vectors the driver can work with.
+ * @param optimal      Number of vectors the driver would like.
+ * @param modes        INTERRUPT_STRATEGY_* values the driver accepts.
+ * @param result       Receives the kernel reservation on success.
+ * @param selectedMode Receives the chosen INTERRUPT_STRATEGY_* value on success.
+ * @return OS_EOK on success, or the error from the query or the reservation.
  */
 oserr_t
 __InterruptPciReserve(
@@ -102,24 +161,30 @@ __InterruptPciReserve(
     _Out_ uint32_t*               selectedMode);
 
 /**
- * @brief Translate a shared lifecycle command into the PCI provider protocol.
- * @param interrupt Allocated PCI message object with selected mode.
- * @param operation Bus-neutral lifecycle command.
- * @return Provider/transport status, without changing local ownership flags.
+ * @brief Sends one bus request to the PCI bus for an allocated PCI interrupt.
+ * The state of the interrupt is not changed.
+ *
+ * @param interrupt Allocated PCI interrupt with a chosen mode.
+ * @param request   Request to send.
+ * @return OS_EOK on success, or the error from the PCI bus or the transport.
  */
 oserr_t
-__InterruptPciControl(
-    _In_ DeviceInterrupt_t*               interrupt,
-    _In_ enum __InterruptProviderOperation operation);
+__InterruptPciRequest(
+    _In_ DeviceInterrupt_t*         interrupt,
+    _In_ enum __InterruptBusRequest request);
 
 /**
- * @brief Program every reserved PCI vector while device delivery is blocked.
- * @param interrupt PCI object whose provider reservation succeeded.
- * @return OS_EOK or query/programming error; caller must retain the lease on
- *         any failure and use the shared lifecycle to roll back partial writes.
+ * @brief Writes the address and data of every reserved vector to the PCI
+ * device. Must be called after the reserve request succeeded and before
+ * delivery is enabled.
+ *
+ * @param interrupt PCI interrupt whose reservation with the PCI bus succeeded.
+ * @return OS_EOK on success, or the error from the kernel query or the PCI
+ *         bus. On failure the caller keeps the reservation and releases it
+ *         through DeviceInterruptDestroy.
  */
 oserr_t
 __InterruptPciProgram(
     _In_ DeviceInterrupt_t* interrupt);
 
-#endif //!LIBDDK_INTERRUPT_PRIVATE_H
+#endif //!__DDK_INTERRUPT_PRIVATE_H__

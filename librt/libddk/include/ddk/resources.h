@@ -85,4 +85,4 @@ DeviceActivate(
 
 _CODE_END
 
-#endif
+#endif //!__DDK_RESOURCES_H__

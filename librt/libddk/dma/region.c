@@ -26,21 +26,30 @@
 #include <limits.h>
 #include <stdlib.h>
 
+enum __DmaRegionSessionState {
+    // Slots can be initialized and uses can begin.
+    DmaRegionSessionStateOpen,
+    // DMARegionSessionClose has started to release the kernel handle. If the
+    // release fails, the session stays in this state until the close is tried
+    // again and succeeds.
+    DmaRegionSessionStateClosing
+};
+
 struct DMARegionSession {
     // Parent region mapping this session reads device addresses from.
-    struct DMAMapping*   Mapping;
+    struct DMAMapping*           Mapping;
     // Handle, identity, and byte range returned by Syscall_DmaRegionSessionOpen.
-    OSDmaRegionSession_t Kernel;
+    OSDmaRegionSession_t         Kernel;
     // Device segments covering just this region, sliced from Mapping at open time.
-    struct DMASegment*   Segments;
+    struct DMASegment*           Segments;
     // Number of valid entries in Segments.
-    uint32_t             SegmentCount;
+    uint32_t                     SegmentCount;
     // Count of currently active DMARegionUse_t records on this session.
-    unsigned int         Active;
-    // Set when DMARegionSessionClose starts tearing down the kernel handle.
-    bool                 Closing;
+    unsigned int                 Active;
+    // See enum __DmaRegionSessionState.
+    enum __DmaRegionSessionState State;
     // Bitmap tracking which slot indices have already been bound via DMARegionUseInitialize.
-    unsigned char        Initialized[];
+    unsigned char                Initialized[];
 };
 
 // The kernel has already checked that this region fits inside the parent
@@ -98,7 +107,7 @@ DMARegionSessionOpen(
         return OS_EINVALPARAMS;
     }
 
-    if (*sessionOut != NULL || mapping->Closing) {
+    if (*sessionOut != NULL || mapping->State != DmaMappingStateMapped) {
         return OS_EBUSY;
     }
 
@@ -171,7 +180,8 @@ DMARegionUseInitialize(
     // Each slot index may only belong to one DMARegionUse_t record so two
     // callers cannot share a kernel slot and corrupt its generation counter.
     mask = (unsigned char)(1U << (slot % 8));
-    if (session->Closing || use->Session != NULL || (session->Initialized[slot / 8] & mask) != 0) {
+    if (session->State != DmaRegionSessionStateOpen || use->Session != NULL ||
+        (session->Initialized[slot / 8] & mask) != 0) {
         return OS_EBUSY;
     }
 
@@ -198,7 +208,7 @@ DMATryBeginRegionUse(
     }
 
     session = use->Session;
-    if (use->Active || session->Closing) {
+    if (use->Active || session->State != DmaRegionSessionStateOpen) {
         return OS_EBUSY;
     }
 
@@ -277,7 +287,7 @@ DMARegionSessionClose(
 
     // Mark closing before releasing the kernel handle so failed closes block new
     // slot initialization or begins while the caller retries close.
-    current->Closing = true;
+    current->State = DmaRegionSessionStateClosing;
     status = Syscall_ResourceRelease(current->Kernel.Handle);
     if (status != OS_EOK) {
         WARNING("DMARegionSessionClose: session %u, buffer %u region %u close failed: %u",

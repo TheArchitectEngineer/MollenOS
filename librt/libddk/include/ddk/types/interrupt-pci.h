@@ -18,8 +18,8 @@
  * PCI interrupt reservation requests shared by libddk and deviced.
  */
 
-#ifndef __DDK_TYPES_PCI_INTERRUPT_H__
-#define __DDK_TYPES_PCI_INTERRUPT_H__
+#ifndef __DDK_TYPES_INTERRUPT_PCI_H__
+#define __DDK_TYPES_INTERRUPT_PCI_H__
 
 #include <os/osdefs.h>
 
@@ -106,4 +106,4 @@ struct PciInterruptRequest {
     uint32_t Reserved; // Must be zero for every operation.
 };
 
-#endif //!__DDK_TYPES_PCI_INTERRUPT_H__
+#endif //!__DDK_TYPES_INTERRUPT_PCI_H__

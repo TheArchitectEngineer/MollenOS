@@ -20,8 +20,8 @@
  *   and functionality, refer to the individual things for descriptions
  */
 
-#ifndef _UTILS_INTERFACE_H_
-#define _UTILS_INTERFACE_H_
+#ifndef __DDK_UTILS_H__
+#define __DDK_UTILS_H__
 
 #include <ddk/ddkdefs.h>
 #include <os/types/syslog.h>
@@ -110,4 +110,4 @@ DDKDECL(oserr_t,
 
 _CODE_END
 
-#endif //!_UTILS_INTERFACE_H_
+#endif //!__DDK_UTILS_H__

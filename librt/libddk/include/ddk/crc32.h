@@ -43,4 +43,4 @@ DDKDECL(uint32_t, Crc32Calculate(
     _In_ const uint8_t* data,
     _In_ size_t         length));
 
-#endif //!__VALI_CRC32_H__
+#endif //!__DDK_CRC32_H__

@@ -31,9 +31,11 @@ struct MemoryMappingParameters {
 /**
  * @brief Creates a new memory space that can be used to create new mappings, and manipulate existing mappings.
  *
- * @param flags     Memory-space creation flags.
- * @param resultOut Receives the handle and security-group ID on success. Unchanged on failure.
- * @return          Status of the operation.
+ * @param flags             Memory-space creation flags.
+ * @param msHandleOut       Receives the handle of the memory space on success. Unchanged on failure.
+ * @param securityHandleOut Receives the security-group ID on success. Unchanged on failure.
+ * @return OS_EOK on success, OS_EINVALPARAMS for a missing output pointer,
+ *         or an error from the kernel.
  */
 DDKDECL(oserr_t,
 CreateMemorySpace(
@@ -43,21 +45,31 @@ CreateMemorySpace(
 
 /**
  * @brief Retrieves the memory space that is currently running for the thread handle.
+ *
+ * @param thread    Handle of the thread to look up.
+ * @param handleOut Receives the handle of the memory space on success.
+ * @return OS_EOK on success, OS_EINVALPARAMS for a missing output pointer,
+ *         or an error from the kernel.
  */
 DDKDECL(oserr_t,
 GetMemorySpaceForThread(
-    _In_  uuid_t  Thread,
-    _Out_ uuid_t* Handle));
+    _In_  uuid_t  thread,
+    _Out_ uuid_t* handleOut));
 
 /**
- * CreateMemoryMapping
- * Creates a new memory mapping in the memory space, if it was successful in creating a mapping,
- * a new access buffer for that piece of memory will be returned.
+ * @brief Creates a new memory mapping in the memory space. The new memory is also
+ * mapped into the memory space of the caller, so the caller can fill it.
+ *
+ * @param handle     Handle of the memory space to create the mapping in.
+ * @param parameters Address, length and flags of the mapping.
+ * @param addressOut Receives the address the caller can use to access the memory.
+ * @return OS_EOK on success, OS_EINVALPARAMS for a missing pointer,
+ *         or an error from the kernel.
  */
 DDKDECL(oserr_t,
 CreateMemoryMapping(
-    _In_  uuid_t                          Handle,
-    _In_  struct MemoryMappingParameters* Parameters,
-    _Out_ void**                          AddressOut));
+    _In_  uuid_t                          handle,
+    _In_  struct MemoryMappingParameters* parameters,
+    _Out_ void**                          addressOut));
 
 #endif //!__DDK_MEMORY_H__

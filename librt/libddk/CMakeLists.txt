@@ -8,36 +8,33 @@ if (VALI_ARCH STREQUAL "i386" OR VALI_ARCH STREQUAL "amd64")
     set (CMAKE_ASM_NASM_OBJECT_FORMAT ${NASM_DEFAULT_FORMAT})
 endif ()
 
-set (GENERATED_SOURCES
-    ${CMAKE_BINARY_DIR}/protocols/sys_session_service_client.h
-    ${CMAKE_BINARY_DIR}/protocols/sys_session_service_client.c
-    ${CMAKE_BINARY_DIR}/protocols/sys_storage_service_client.h
-    ${CMAKE_BINARY_DIR}/protocols/sys_storage_service_client.c
-    ${CMAKE_BINARY_DIR}/protocols/sys_file_service_client.h
-    ${CMAKE_BINARY_DIR}/protocols/sys_file_service_client.c
-    ${CMAKE_BINARY_DIR}/protocols/sys_mount_service_client.h
-    ${CMAKE_BINARY_DIR}/protocols/sys_mount_service_client.c
-    ${CMAKE_BINARY_DIR}/protocols/sys_process_service_client.h
-    ${CMAKE_BINARY_DIR}/protocols/sys_process_service_client.c
-    ${CMAKE_BINARY_DIR}/protocols/sys_library_service_client.h
-    ${CMAKE_BINARY_DIR}/protocols/sys_library_service_client.c
-    ${CMAKE_BINARY_DIR}/protocols/sys_socket_service_client.h
-    ${CMAKE_BINARY_DIR}/protocols/sys_socket_service_client.c
-    ${CMAKE_BINARY_DIR}/protocols/sys_device_service_client.h
-    ${CMAKE_BINARY_DIR}/protocols/sys_device_service_client.c
-    ${CMAKE_BINARY_DIR}/protocols/sys_usb_service_client.h
-    ${CMAKE_BINARY_DIR}/protocols/sys_usb_service_client.c
-    ${CMAKE_BINARY_DIR}/protocols/ctt_driver_service_client.h
-    ${CMAKE_BINARY_DIR}/protocols/ctt_driver_service_client.c
-    ${CMAKE_BINARY_DIR}/protocols/ctt_storage_service_client.h
-    ${CMAKE_BINARY_DIR}/protocols/ctt_storage_service_client.c
-    ${CMAKE_BINARY_DIR}/protocols/ctt_usbhub_service_client.h
-    ${CMAKE_BINARY_DIR}/protocols/ctt_usbhub_service_client.c
-    ${CMAKE_BINARY_DIR}/protocols/ctt_usbhost_service_client.h
-    ${CMAKE_BINARY_DIR}/protocols/ctt_usbhost_service_client.c
-    ${CMAKE_BINARY_DIR}/protocols/ctt_input_service_client.h
-    ${CMAKE_BINARY_DIR}/protocols/ctt_input_service_client.c
+# The gracht client stubs that are built into libddk. Each name is a protocol
+# under protocols/, and its generated header and source are found in the
+# protocols build directory.
+set (PROTOCOL_CLIENTS
+    sys_session
+    sys_storage
+    sys_file
+    sys_mount
+    sys_process
+    sys_library
+    sys_socket
+    sys_device
+    sys_usb
+    ctt_driver
+    ctt_storage
+    ctt_usbhub
+    ctt_usbhost
+    ctt_input
 )
+
+set (GENERATED_SOURCES "")
+foreach (PROTOCOL_CLIENT ${PROTOCOL_CLIENTS})
+    list (APPEND GENERATED_SOURCES
+        ${CMAKE_BINARY_DIR}/protocols/${PROTOCOL_CLIENT}_service_client.h
+        ${CMAKE_BINARY_DIR}/protocols/${PROTOCOL_CLIENT}_service_client.c
+    )
+endforeach ()
 set_source_files_properties ( ${GENERATED_SOURCES} PROPERTIES GENERATED TRUE )
 
 if (VALI_ARCH STREQUAL "i386" OR VALI_ARCH STREQUAL "amd64")
@@ -72,6 +69,10 @@ add_library(libddk
     deviceio.c
     storage.c
     resources.c
+    controller.c
+    supply.c
+    clock.c
+    firmware_node.c
     firmware.c
     io.c
     mappings.c

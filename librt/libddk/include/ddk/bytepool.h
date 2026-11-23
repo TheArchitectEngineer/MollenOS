@@ -402,8 +402,8 @@
     ==================
 */
 
-#ifndef __BYTEPOOL_INTERFACE_H__
-#define __BYTEPOOL_INTERFACE_H__
+#ifndef __DDK_BYTEPOOL_H__
+#define __DDK_BYTEPOOL_H__
 
 #include <ddk/ddkdefs.h>
 
@@ -472,4 +472,4 @@ DDKDECL(void, bpoold(bytepool_t *pool, void *buf, int dumpalloc, int dumpfree));
  * any error generates an assertion failure. */
 DDKDECL(oserr_t, bpoolv(bytepool_t * pool, void *buf));
 
-#endif //!__BYTEPOOL_INTERFACE_H__
+#endif //!__DDK_BYTEPOOL_H__

@@ -149,54 +149,93 @@ __WriteVolatileLowHigh64(
 }
 
 /**
- * @brief Registers a new device memory io with the operating system. If this memory range
- * overlaps any existing io range, this request will be denied by the system.
+ * @brief Registers a range of device memory (MMIO) with the kernel as an I/O
+ * space. The range is not mapped yet. Call AcquireDeviceIo to map it before
+ * reading or writing registers.
+ *
+ * @param ioSpace      Receives the description and the identifier of the I/O space.
+ * @param physicalBase Physical address of the first register.
+ * @param length       Size of the range in bytes.
+ * @return OS_EOK on success, OS_EINVALPARAMS for a missing ioSpace, or an error
+ *         from the kernel. The kernel refuses a range that overlaps an I/O space
+ *         that is already registered.
  */
 DDKDECL(oserr_t,
 CreateDeviceMemoryIo(
-    _In_ DeviceIo_t*    IoSpace,
-    _In_ uintptr_t      PhysicalBase,
-    _In_ size_t         Length));
+    _In_ DeviceIo_t* ioSpace,
+    _In_ uintptr_t   physicalBase,
+    _In_ size_t      length));
 
 /**
- * @brief Registers a new device port io with the operating system. If this port io range
- * overlaps any existing range, this request will be denied by the system.
+ * @brief Registers a range of x86 I/O ports with the kernel as an I/O space.
+ *
+ * @param ioSpace Receives the description and the identifier of the I/O space.
+ * @param port    Number of the first port.
+ * @param length  Number of ports in the range.
+ * @return OS_EOK on success, OS_EINVALPARAMS for a missing ioSpace, or an error
+ *         from the kernel. The kernel refuses a range that overlaps an I/O space
+ *         that is already registered.
  */
 DDKDECL(oserr_t,
 CreateDevicePortIo(
-    _In_ DeviceIo_t*    IoSpace,
-    _In_ uint16_t       Port,
-    _In_ size_t         Length));
+    _In_ DeviceIo_t* ioSpace,
+    _In_ uint16_t    port,
+    _In_ size_t      length));
 
-/* CreateDevicePinIo
- * Registers a new device port/pin io with the operating system. If this port/pin
- * overlaps any existing port/pin, this request will be denied by the system. */
+/**
+ * @brief Registers a single pin of a port with the kernel as an I/O space.
+ * ReadDeviceIo and WriteDeviceIo do not support pin based I/O spaces.
+ *
+ * @param ioSpace Receives the description and the identifier of the I/O space.
+ * @param port    Number of the port the pin belongs to.
+ * @param pin     Number of the pin on that port.
+ * @return OS_EOK on success, OS_EINVALPARAMS for a missing ioSpace, or an error
+ *         from the kernel. The kernel refuses a pin that is already registered.
+ */
 DDKDECL(oserr_t,
 CreateDevicePinIo(
-    _In_ DeviceIo_t*    IoSpace,
-    _In_ uint16_t       Port,
-    _In_ uint8_t        Pin));
+    _In_ DeviceIo_t* ioSpace,
+    _In_ uint16_t    port,
+    _In_ uint8_t     pin));
 
-/* DestroyDeviceIo
- * Unregisters a device-io with the operating system, releasing all resources
- * associated and disabling the io range for use. */
+/**
+ * @brief Removes an I/O space that was registered with one of the create calls.
+ * The range can not be used through this I/O space afterwards.
+ *
+ * @param ioSpace The registered I/O space.
+ * @return OS_EOK on success, OS_EINVALPARAMS for a missing ioSpace, or an error
+ *         from the kernel.
+ */
 DDKDECL(oserr_t,
 DestroyDeviceIo(
-    _In_ DeviceIo_t*    IoSpace));
+    _In_ DeviceIo_t* ioSpace));
 
-/* AcquireDeviceIo
- * Tries to claim a given io-space, only one driver can claim a single io-space 
- * at a time, to avoid two drivers using the same device */
+/**
+ * @brief Takes a registered I/O space into use. Only one driver can have an
+ * I/O space acquired at a time, which keeps two drivers from using the same
+ * device. For device memory this maps the range and stores the address in
+ * Access.Memory.VirtualBase.
+ *
+ * @param ioSpace The registered I/O space. Updated with the mapping on success.
+ * @return OS_EOK on success, OS_EINVALPARAMS for a missing ioSpace, or an error
+ *         from the kernel.
+ */
 DDKDECL(oserr_t,
 AcquireDeviceIo(
-    _In_ DeviceIo_t*    IoSpace));
+    _InOut_ DeviceIo_t* ioSpace));
 
-/* ReleaseDeviceIo
- * Tries to release a given io-space, only one driver can claim a single io-space 
- * at a time, to avoid two drivers using the same device */
+/**
+ * @brief Gives up an I/O space taken with AcquireDeviceIo, so another driver
+ * can acquire it. For device memory the mapping is removed and
+ * Access.Memory.VirtualBase is set to zero.
+ *
+ * @param ioSpace The acquired I/O space.
+ * @return OS_EOK on success, OS_EINVALPARAMS for a missing ioSpace, or an error
+ *         from the kernel.
+ */
 DDKDECL(oserr_t,
 ReleaseDeviceIo(
-    _In_ DeviceIo_t*    IoSpace));
+    _InOut_ DeviceIo_t* ioSpace));
 
 /**
  * @brief Map a registered MMIO subrange without acquiring its exclusive claim.
@@ -220,24 +259,42 @@ MapDeviceIo(
     _In_  size_t length,
     _Out_ void** mappingOut));
 
-/* ReadDeviceIo
- * Read data from the given io-space at <offset> with the given <length>, 
- * the offset and length must be below the size of the io-space */
+/**
+ * @brief Reads one register from an acquired I/O space.
+ *
+ * Device memory supports widths of 1, 2 and 4 bytes, and 8 bytes on 64-bit
+ * systems. Port ranges support 1, 2 and 4 bytes and only exist on x86.
+ *
+ * @param ioSpace The acquired I/O space.
+ * @param offset  Byte offset of the register inside the I/O space.
+ * @param length  Width of the register in bytes.
+ * @return The register value. A read that can not be done is logged and
+ *         returns zero.
+ */
 DDKDECL(size_t,
 ReadDeviceIo(
-    _In_ DeviceIo_t*    IoSpace,
-    _In_ size_t         Offset,
-    _In_ size_t         Length));
+    _In_ DeviceIo_t* ioSpace,
+    _In_ size_t      offset,
+    _In_ size_t      length));
 
-/* WriteDeviceIo
- * Write data from the given io-space at <offset> with the given <length>, 
- * the offset and length must be below the size of the io-space */
+/**
+ * @brief Writes one register in an acquired I/O space. The supported widths
+ * are the same as for ReadDeviceIo.
+ *
+ * @param ioSpace The acquired I/O space.
+ * @param offset  Byte offset of the register inside the I/O space.
+ * @param value   Value to write. Bits above the register width are dropped.
+ * @param length  Width of the register in bytes.
+ * @return OS_EOK on success, OS_EINVALPARAMS for a missing ioSpace or a width
+ *         that is not supported, or OS_ENOTSUPPORTED for an I/O space type that
+ *         can not be written.
+ */
 DDKDECL(oserr_t,
 WriteDeviceIo(
-    _In_ DeviceIo_t*    IoSpace,
-    _In_ size_t         Offset,
-    _In_ size_t         Value,
-    _In_ size_t         Length));
+    _In_ DeviceIo_t* ioSpace,
+    _In_ size_t      offset,
+    _In_ size_t      value,
+    _In_ size_t      length));
 
 /**
  * @brief Read a 64-bit device I/O register as two 32-bit accesses, low word first.
@@ -291,4 +348,4 @@ __WriteDeviceIoLowHigh64(
 
 _CODE_END
 
-#endif //!__DEVICEIO_INTERFACE_H__
+#endif //!__DDK_IO_H__

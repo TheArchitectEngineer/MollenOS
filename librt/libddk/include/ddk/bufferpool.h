@@ -20,8 +20,8 @@
  *   and functionality, refer to the individual things for descriptions
  */
 
-#ifndef __DMA_POOL_H__
-#define __DMA_POOL_H__
+#ifndef __DDK_BUFFERPOOL_H__
+#define __DDK_BUFFERPOOL_H__
 
 #include <ddk/ddkdefs.h>
 #include <os/types/handle.h>
@@ -96,4 +96,4 @@ dma_pool_offset(
     _In_ void*            address));
 
 _CODE_END
-#endif //!__DMA_POOL_H__
+#endif //!__DDK_BUFFERPOOL_H__

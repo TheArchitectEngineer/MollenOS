@@ -21,8 +21,8 @@
  *   and functionality, refer to the individual things for descriptions
  */
 
-#ifndef __INTERRUPT_INTERFACE_H__
-#define __INTERRUPT_INTERFACE_H__
+#ifndef __DDK_INTERRUPT_H__
+#define __DDK_INTERRUPT_H__
 
 #include <ddk/types/interrupt.h>
 
@@ -322,4 +322,4 @@ DDKDECL(oserr_t,
 DeviceInterruptDestroy(
     _InOut_ DeviceInterrupt_t* interrupt));
 
-#endif //!__INTERRUPT_INTERFACE_H__
+#endif //!__DDK_INTERRUPT_H__

@@ -25,12 +25,12 @@
 
 oserr_t
 __InterruptPciReserve(
-    _In_    DeviceInterrupt_t*        interrupt,
-    _In_    uint32_t                  minimum,
-    _In_    uint32_t                  optimal,
-    _In_    uint32_t                  modes,
-    _Out_   InterruptGroupResult_t*   result,
-    _Out_   uint32_t*                 selectedMode)
+    _In_  DeviceInterrupt_t*      interrupt,
+    _In_  uint32_t                minimum,
+    _In_  uint32_t                optimal,
+    _In_  uint32_t                modes,
+    _Out_ InterruptGroupResult_t* result,
+    _Out_ uint32_t*               selectedMode)
 {
     const uint32_t preference[] = {
         INTERRUPT_STRATEGY_MSIX,
@@ -64,9 +64,11 @@ __InterruptPciReserve(
     
     modes &= support.Strategies | INTERRUPT_STRATEGY_INTx;
 
-    // PCI policy lives above kernel reservation. A one-message MSI request and
-    // a one-vector MSI-X request use the same kernel resource, but different
-    // device programming. Never retry transport/configuration errors as INTx.
+    // Try the modes from best to worst and keep the first one the kernel can
+    // reserve. One MSI message and one MSI-X vector are the same thing to the
+    // kernel, and only differ in how the device is programmed later. Only
+    // OS_ENOTSUPPORTED and OS_EBUSY move on to the next mode. Any other error
+    // is returned, so a real failure is never hidden by falling back to INTx.
     status = OS_ENOTSUPPORTED;
     for (uint32_t i = 0; i < sizeof(preference) / sizeof(preference[0]); i++) {
         uint32_t capacity;
@@ -98,10 +100,17 @@ __InterruptPciReserve(
         TRACE("__InterruptPciReserve: device %u mode 0x%x reservation: %u", interrupt->DeviceId, mode, status);
         if (status == OS_EOK) {
             *selectedMode = mode;
+            NOTICE("PCI IRQ selected: device=%u mode=%s allocation=%u count=%u controller=%u INTx-line=%i",
+                   interrupt->DeviceId,
+                   mode == INTERRUPT_STRATEGY_MSIX ? "MSI-X" :
+                       (mode == INTERRUPT_STRATEGY_MSI ? "MSI" : "INTx"),
+                   result->Handle, result->Count, request.ControllerID, interrupt->Line.Line);
             return OS_EOK;
         }
         
         if (status != OS_ENOTSUPPORTED && status != OS_EBUSY) {
+            ERROR("__InterruptPciReserve: device %u mode 0x%x reservation failed: %u",
+                  interrupt->DeviceId, mode, status);
             return status;
         }
     }
@@ -109,40 +118,41 @@ __InterruptPciReserve(
 }
 
 oserr_t
-__InterruptPciControl(
-    _In_ DeviceInterrupt_t*                interrupt,
-    _In_ enum __InterruptProviderOperation operation)
+__InterruptPciRequest(
+    _In_ DeviceInterrupt_t*         interrupt,
+    _In_ enum __InterruptBusRequest request)
 {
-    struct PciInterruptRequest request = {
+    struct PciInterruptRequest pciRequest = {
         .Allocation = interrupt->State->Handle,
         .Strategy = interrupt->State->PciMode
     };
 
-    // Only this module knows the PCI wire operations. Local ownership is
-    // recorded by the shared lifecycle before sending any uncertain RPC.
-    switch (operation) {
-        case InterruptProviderReserve:
-            request.Operation = PciInterruptReserve;
-            request.Count = interrupt->Count;
+    // Translate the request into the operation codes of the PCI interrupt
+    // ioctl. interrupt.c has already recorded the state change it expects, and
+    // logs a failed request.
+    switch (request) {
+        case InterruptBusRequestReserve:
+            pciRequest.Operation = PciInterruptReserve;
+            pciRequest.Count = interrupt->Count;
             break;
-        case InterruptProviderEnable:
-            request.Operation = PciInterruptEnable;
+        case InterruptBusRequestEnable:
+            pciRequest.Operation = PciInterruptEnable;
             break;
-        case InterruptProviderDisable:
-            request.Operation = PciInterruptDisable;
+        case InterruptBusRequestDisable:
+            pciRequest.Operation = PciInterruptDisable;
             break;
-        case InterruptProviderRelease:
-            request.Operation = PciInterruptRelease;
+        case InterruptBusRequestRelease:
+            pciRequest.Operation = PciInterruptRelease;
             break;
         default:
             return OS_EINVALPARAMS;
     }
-    
+
     return OSDeviceIOCtl(
         interrupt->DeviceId,
         OSIOCTLREQUEST_PCI_INTERRUPT,
-        &request,
-        sizeof(request)
+        &pciRequest,
+        sizeof(pciRequest)
     );
 }
 
@@ -158,11 +168,14 @@ __InterruptPciProgram(
 
     DeviceInterruptMessage_t     message;
     struct DeviceInterruptState* state = interrupt->State;
+    oserr_t                      status;
 
-    // Program only after reservation succeeded. A failed write or lost reply
-    // leaves provider ownership with the shared lifecycle for orderly rollback.
+    // Ask the kernel for the address and data of each vector and have the PCI
+    // bus write them to the device. If a write fails or its reply is lost, the
+    // reservation with the PCI bus is still held. The caller releases it
+    // through DeviceInterruptDestroy.
     for (uint32_t i = 0; i < interrupt->Count; i++) {
-        oserr_t status = Syscall_InterruptGetMessage(state->Handle, i, &message);
+        status = Syscall_InterruptGetMessage(state->Handle, i, &message);
         if (status != OS_EOK) {
             ERROR("__InterruptPciProgram: allocation %u message %u query failed: %u", state->Handle, i, status);
             return status;
@@ -184,6 +197,8 @@ __InterruptPciProgram(
                   interrupt->DeviceId, state->Handle, i, status);
             return status;
         }
+        NOTICE("PCI IRQ programmed: device=%u allocation=%u vector=%u address=0x%08x%08x data=0x%08x",
+               interrupt->DeviceId, state->Handle, i, message.AddressHigh, message.AddressLow, message.Data);
     }
     return OS_EOK;
 }
@@ -211,7 +226,8 @@ uint32_t
 DeviceInterruptGetPciMode(
     _In_ const DeviceInterrupt_t* interrupt)
 {
-    // Keep capability details out of the common object's public result fields.
+    // The chosen mode is kept in the private state, so the public interrupt
+    // structure stays free of PCI details.
     return interrupt->State == NULL ? 0 : interrupt->State->PciMode;
 }
 

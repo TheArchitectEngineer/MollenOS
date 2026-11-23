@@ -27,6 +27,7 @@
 #include <os/types/syscall.h>
 #include <threads.h>
 #include <stdlib.h>
+#include <string.h>
 
 #include "private.h"
 
@@ -48,7 +49,8 @@ __Initialize(void)
 // Asks the device service for a binding, which is the permission to open a DMA
 // context for this device. A transport error does not tell us whether the service
 // granted it. decoded is set to true only when a reply was received and read, so
-// the caller can tell a clear rejection from an unknown result.
+// the caller can tell a clear rejection from an unknown result. The state of the
+// context is left to the caller.
 static oserr_t
 __RequestBinding(
     _InOut_ struct DMAContext* context,
@@ -97,7 +99,6 @@ __RequestBinding(
     }
 
     context->Binding = binding;
-    context->BindingPending = false;
     return OS_EOK;
 }
 
@@ -171,6 +172,7 @@ DMAOpen(
     }
 
     atomic_init(&context->Children, 0);
+    context->State = DmaContextStateOpen;
     context->Device = device;
     context->RequestId = ++g_dmaRequestId;
     context->Handle = UUID_INVALID;
@@ -182,8 +184,8 @@ DMAOpen(
             // The service may have granted the binding even though the reply was
             // lost. Keep the request ID so DMAClose can ask again and get the
             // same binding back.
-            context->BindingPending = true;
-            goto pending;
+            context->State = DmaContextStateBindingUnknown;
+            goto publish;
         }
         goto discard;
     }
@@ -198,7 +200,10 @@ DMAOpen(
         ERROR("DMAOpen: device %u bound context open failed: %u", device, status);
         cleanupStatus = __ReleaseBinding(context);
         if (cleanupStatus != OS_EOK) {
-            goto pending;
+            // The binding is still held, so the context is kept to release it
+            // from DMAClose.
+            context->State = DmaContextStateClosing;
+            goto publish;
         }
         goto discard;
     }
@@ -207,16 +212,13 @@ DMAOpen(
     // is only a real context handle after the call returns OS_EOK, and only then
     // will cleanup try to release it.
     context->Handle = handle;
-    goto publish;
-
-pending:
-    // This context only exists to finish cleanup. It keeps the device's place in
-    // the registry until every unresolved or failed cleanup step is done, so a new
-    // open for the same device is refused until then. It cannot allocate or map
-    // memory.
-    context->Closing = true;
 
 publish:
+    // A context that failed to open is published as well when it still has
+    // cleanup left. Such a context is not in the Open state, so it cannot
+    // allocate or map memory. It keeps the device's place in the registry until
+    // DMAClose has finished every cleanup step, so a new open for the same
+    // device is refused until then.
     context->Next = g_dmaContexts;
     g_dmaContexts = context;
     *contextOut = context;
@@ -283,8 +285,7 @@ DMAClose(
     // where the last try stopped. A normal close sends no request to the device
     // service. Only a context whose binding reply was lost sends the original
     // request again.
-    context->Closing = true;
-    if (context->BindingPending) {
+    if (context->State == DmaContextStateBindingUnknown) {
         status = __RequestBinding(context, &decoded);
         if (status != OS_EOK) {
             // Even a clear rejection does not prove the earlier request failed,
@@ -293,6 +294,7 @@ DMAClose(
             goto exit;
         }
     }
+    context->State = DmaContextStateClosing;
     
     if (context->Handle != UUID_INVALID) {
         status = Syscall_ResourceRelease(context->Handle);

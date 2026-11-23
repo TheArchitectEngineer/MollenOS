@@ -13,6 +13,9 @@
  *
  * You should have received a copy of the GNU General Public License
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
+ *
+ * Lookup of the system services by their handle path. Each handle is looked up
+ * once and cached for the rest of the process.
  */
 
 //#define __TRACE
@@ -23,148 +26,156 @@
 #include <os/threads.h>
 #include <threads.h>
 
-static uuid_t g_sessionServiceId = UUID_INVALID;
-static uuid_t g_deviceServiceId  = UUID_INVALID;
-static uuid_t g_usbServiceId     = UUID_INVALID;
-static uuid_t g_processServiceId = UUID_INVALID;
-static uuid_t g_fileServiceId    = UUID_INVALID;
-static uuid_t g_netServiceId     = UUID_INVALID;
-static uuid_t g_sysLogServiceId  = UUID_INVALID;
+// Time between two lookups while waiting for a service to register itself.
+#define SERVICE_POLL_INTERVAL_MS 10
 
+enum __ServiceIndex {
+    SERVICE_INDEX_DEVICE,
+    SERVICE_INDEX_USB,
+    SERVICE_INDEX_PROCESS,
+    SERVICE_INDEX_FILE,
+    SERVICE_INDEX_NET,
+    SERVICE_INDEX_SYSLOG,
+
+    SERVICE_INDEX_COUNT
+};
+
+// One system service that can be looked up. Handle stays UUID_INVALID until
+// the first successful lookup, and is reused after that.
+struct __Service {
+    const char* Path;
+    uuid_t      Handle;
+};
+
+static struct __Service g_services[SERVICE_INDEX_COUNT] = {
+    [SERVICE_INDEX_DEVICE]  = { SERVICE_DEVICE_PATH,  UUID_INVALID },
+    [SERVICE_INDEX_USB]     = { SERVICE_USB_PATH,     UUID_INVALID },
+    [SERVICE_INDEX_PROCESS] = { SERVICE_PROCESS_PATH, UUID_INVALID },
+    [SERVICE_INDEX_FILE]    = { SERVICE_FILE_PATH,    UUID_INVALID },
+    [SERVICE_INDEX_NET]     = { SERVICE_NET_PATH,     UUID_INVALID },
+    [SERVICE_INDEX_SYSLOG]  = { SERVICE_SYSLOG_PATH,  UUID_INVALID },
+};
+
+// Returns the cached handle of the service, or looks it up when it is not
+// known yet. A service that has not registered its path yet is a normal
+// answer during boot, so a failed lookup is only traced.
 static uuid_t
-__GetHandleFromPath(
-    _In_ const char* Path)
+__GetService(
+    _In_ enum __ServiceIndex index)
 {
-    uuid_t Handle;
-    if (Syscall_HandleLookup(Path, &Handle) != OS_EOK) {
+    struct __Service* service = &g_services[index];
+    uuid_t            handle;
+    oserr_t           status;
+
+    if (service->Handle != UUID_INVALID) {
+        return service->Handle;
+    }
+
+    status = Syscall_HandleLookup(service->Path, &handle);
+    if (status != OS_EOK) {
+        TRACE("__GetService: lookup of %s failed (%u)", service->Path, status);
         return UUID_INVALID;
     }
-    return Handle;
+
+    service->Handle = handle;
+    return handle;
 }
 
+// Looks the service up every SERVICE_POLL_INTERVAL_MS until it is found. A
+// timeout of zero waits forever. Any other timeout is given in milliseconds,
+// and the last lookup happens once that much time has been slept.
 static oserr_t
 __WaitForService(
-    _In_ uuid_t (*getHandleCallback)(void),
-    _In_ size_t timeout)
+    _In_ enum __ServiceIndex index,
+    _In_ size_t              timeout)
 {
-    size_t timeLeft = timeout;
-    uuid_t handle   = getHandleCallback();
-    if (!timeout) {
-        while (handle == UUID_INVALID) {
-            thrd_sleep(&(struct timespec) { .tv_nsec = 10 * NSEC_PER_MSEC }, NULL);
-            handle = getHandleCallback();
-        }
-    } else {
-        while (timeLeft && handle == UUID_INVALID) {
-            thrd_sleep(&(struct timespec) { .tv_nsec = 10 * NSEC_PER_MSEC }, NULL);
-            timeLeft -= 10;
-            handle = getHandleCallback();
-        }
-    }
-    return (handle == UUID_INVALID) ? OS_ETIMEOUT : OS_EOK;
-}
+    size_t waited = 0;
 
-uuid_t GetSessionService(void)
-{
-    if (g_sessionServiceId == UUID_INVALID) {
-        g_sessionServiceId = __GetHandleFromPath(SERVICE_SESSION_PATH);
+    while (__GetService(index) == UUID_INVALID) {
+        if (timeout != 0 && waited >= timeout) {
+            WARNING("__WaitForService: %s did not appear within %zu ms", g_services[index].Path, timeout);
+            return OS_ETIMEOUT;
+        }
+
+        thrd_sleep(&(struct timespec) { .tv_nsec = SERVICE_POLL_INTERVAL_MS * NSEC_PER_MSEC }, NULL);
+
+        // Only count the time when there is a limit to compare it against,
+        // so waiting forever can never overflow the counter.
+        if (timeout != 0) {
+            waited += SERVICE_POLL_INTERVAL_MS;
+        }
     }
-    return g_sessionServiceId;
+    return OS_EOK;
 }
 
 uuid_t GetDeviceService(void)
 {
-    if (g_deviceServiceId == UUID_INVALID) {
-        g_deviceServiceId = __GetHandleFromPath(SERVICE_DEVICE_PATH);
-    }
-    return g_deviceServiceId;
+    return __GetService(SERVICE_INDEX_DEVICE);
 }
 
 uuid_t GetUsbService(void)
 {
-    if (g_usbServiceId == UUID_INVALID) {
-        g_usbServiceId = __GetHandleFromPath(SERVICE_USB_PATH);
-    }
-    return g_usbServiceId;
+    return __GetService(SERVICE_INDEX_USB);
 }
 
 uuid_t GetProcessService(void)
 {
-    if (g_processServiceId == UUID_INVALID) {
-        g_processServiceId = __GetHandleFromPath(SERVICE_PROCESS_PATH);
-    }
-    return g_processServiceId;
+    return __GetService(SERVICE_INDEX_PROCESS);
 }
 
 uuid_t GetFileService(void)
 {
-    if (g_fileServiceId == UUID_INVALID) {
-        g_fileServiceId = __GetHandleFromPath(SERVICE_FILE_PATH);
-    }
-    return g_fileServiceId;
+    return __GetService(SERVICE_INDEX_FILE);
 }
 
 uuid_t GetNetService(void)
 {
-    if (g_netServiceId == UUID_INVALID) {
-        g_netServiceId = __GetHandleFromPath(SERVICE_NET_PATH);
-    }
-    return g_netServiceId;
+    return __GetService(SERVICE_INDEX_NET);
 }
 
 uuid_t GetSysLogService(void)
 {
-    if (g_sysLogServiceId == UUID_INVALID) {
-        g_sysLogServiceId = __GetHandleFromPath(SERVICE_SYSLOG_PATH);
-    }
-    return g_sysLogServiceId;
-}
-
-oserr_t
-WaitForSessionService(
-    _In_ size_t Timeout)
-{
-    return __WaitForService(GetSessionService, Timeout);
+    return __GetService(SERVICE_INDEX_SYSLOG);
 }
 
 oserr_t
 WaitForDeviceService(
-    _In_ size_t Timeout)
+    _In_ size_t timeout)
 {
-    return __WaitForService(GetDeviceService, Timeout);
+    return __WaitForService(SERVICE_INDEX_DEVICE, timeout);
 }
 
 oserr_t
 WaitForUsbService(
-    _In_ size_t Timeout)
+    _In_ size_t timeout)
 {
-    return __WaitForService(GetUsbService, Timeout);
+    return __WaitForService(SERVICE_INDEX_USB, timeout);
 }
 
 oserr_t
 WaitForProcessService(
-    _In_ size_t Timeout)
+    _In_ size_t timeout)
 {
-    return __WaitForService(GetProcessService, Timeout);
+    return __WaitForService(SERVICE_INDEX_PROCESS, timeout);
 }
 
 oserr_t
 WaitForFileService(
-    _In_ size_t Timeout)
+    _In_ size_t timeout)
 {
-    return __WaitForService(GetFileService, Timeout);
+    return __WaitForService(SERVICE_INDEX_FILE, timeout);
 }
 
 oserr_t
 WaitForNetService(
-    _In_ size_t Timeout)
+    _In_ size_t timeout)
 {
-    return __WaitForService(GetNetService, Timeout);
+    return __WaitForService(SERVICE_INDEX_NET, timeout);
 }
 
 oserr_t
 WaitForSysLogService(
-        _In_ size_t Timeout)
+    _In_ size_t timeout)
 {
-    return __WaitForService(GetSysLogService, Timeout);
+    return __WaitForService(SERVICE_INDEX_SYSLOG, timeout);
 }

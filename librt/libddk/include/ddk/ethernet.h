@@ -139,4 +139,4 @@ DeviceResetEthernetPhy(
 
 _CODE_END
 
-#endif
+#endif //!__DDK_ETHERNET_H__

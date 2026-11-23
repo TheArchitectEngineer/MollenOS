@@ -21,8 +21,8 @@
  *   and functionality, refer to the individual things for descriptions
  */
 
-#ifndef _ACPI_INTEFACE_H_
-#define _ACPI_INTEFACE_H_
+#ifndef __DDK_ACPI_H__
+#define __DDK_ACPI_H__
 
 #include <ddk/ddkdefs.h>
 
@@ -91,4 +91,4 @@ DDKDECL(oserr_t, AcpiQueryStatus(AcpiDescriptor_t * AcpiDescriptor));
 DDKDECL(oserr_t, AcpiQueryTable(const char*signature, ACPI_TABLE_HEADER **tableOut));
 
 
-#endif //!_ACPI_INTEFACE_H_
+#endif //!__DDK_ACPI_H__

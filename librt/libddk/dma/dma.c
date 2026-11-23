@@ -29,8 +29,6 @@ struct DMABuffer {
     SHMHandle_t          Storage;
 };
 
-
-
 _Static_assert(offsetof(struct DMAMapping, Resource) == 0, "Resource release frees the mapping");
 _Static_assert(offsetof(struct DMABuffer, Resource) == 0, "Resource release frees the buffer");
 
@@ -177,7 +175,7 @@ DMAAllocate(
         return OS_EINVALPARAMS;
     }
 
-    if (*bufferOut != NULL || context->Closing) {
+    if (*bufferOut != NULL || context->State != DmaContextStateOpen) {
         return OS_EBUSY;
     }
 
@@ -285,7 +283,7 @@ __DmaMapSHM(
         return OS_EINVALPARAMS;
     }
 
-    if (*mappingOut != NULL || context->Closing) {
+    if (*mappingOut != NULL || context->State != DmaContextStateOpen) {
         return OS_EBUSY;
     }
 
@@ -489,7 +487,7 @@ DMAUnmap(
     // Stop new region sessions from opening if releasing the mapping fails and
     // has to be retried later.
     if (((*mapping)->Flags & DMA_MAP_REGIONS) != 0) {
-        (*mapping)->Closing = true;
+        (*mapping)->State = DmaMappingStateUnmapping;
     }
 
     status = __DmaRelease(&(*mapping)->Resource);

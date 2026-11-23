@@ -16,92 +16,99 @@
  * You should have received a copy of the GNU General Public License
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  *
- *
- * I/O Definitions & Structures
- * - This header describes the base io-structure, prototypes
- *   and functionality, refer to the individual things for descriptions
+ * Device I/O spaces. A driver registers the memory range, port range or pin of
+ * its device with the kernel, acquires it, and then reads and writes the
+ * registers through ReadDeviceIo and WriteDeviceIo.
  */
 
 #include <internal/_syscalls.h>
 #include <ddk/io.h>
+#include <ddk/utils.h>
 #include <assert.h>
 
+#if defined(__i386__) || defined(__amd64__)
+// Port I/O instructions, implemented in arch/<arch>/_io.s
 ASMDECL(uint8_t,  __readbyte(uint16_t Port));
 ASMDECL(void,     __writebyte(uint16_t Port, uint8_t Value));
 ASMDECL(uint16_t, __readword(uint16_t Port));
 ASMDECL(void,     __writeword(uint16_t Port, uint16_t Value));
 ASMDECL(uint32_t, __readlong(uint16_t Port));
 ASMDECL(void,     __writelong(uint16_t Port, uint32_t Value));
+#endif
 
-/* CreateDeviceMemoryIo
- * Registers a new device memory io with the operating system. If this memory range
- * overlaps any existing io range, this request will be denied by the system. */
 oserr_t
 CreateDeviceMemoryIo(
-    _In_ DeviceIo_t*    IoSpace,
-    _In_ uintptr_t      PhysicalBase,
-    _In_ size_t         Length)
+    _In_ DeviceIo_t* ioSpace,
+    _In_ uintptr_t   physicalBase,
+    _In_ size_t      length)
 {
-    assert(IoSpace != NULL);
-    IoSpace->Type                       = DeviceIoMemoryBased;
-    IoSpace->Access.Memory.PhysicalBase = PhysicalBase;
-    IoSpace->Access.Memory.VirtualBase  = 0;
-    IoSpace->Access.Memory.Length       = Length;
-    return Syscall_IoSpaceRegister(IoSpace);
+    assert(ioSpace != NULL);
+    if (ioSpace == NULL) {
+        return OS_EINVALPARAMS;
+    }
+
+    // The virtual base stays zero until AcquireDeviceIo has mapped the range.
+    ioSpace->Type                       = DeviceIoMemoryBased;
+    ioSpace->Access.Memory.PhysicalBase = physicalBase;
+    ioSpace->Access.Memory.VirtualBase  = 0;
+    ioSpace->Access.Memory.Length       = length;
+    return Syscall_IoSpaceRegister(ioSpace);
 }
 
-/* CreateDevicePortIo
- * Registers a new device port io with the operating system. If this port io range
- * overlaps any existing range, this request will be denied by the system. */
 oserr_t
 CreateDevicePortIo(
-    _In_ DeviceIo_t*    IoSpace,
-    _In_ uint16_t       Port,
-    _In_ size_t         Length)
+    _In_ DeviceIo_t* ioSpace,
+    _In_ uint16_t    port,
+    _In_ size_t      length)
 {
-    assert(IoSpace != NULL);
-    IoSpace->Type               = DeviceIoPortBased;
-    IoSpace->Access.Port.Base   = Port;
-    IoSpace->Access.Port.Length = Length;
-    return Syscall_IoSpaceRegister(IoSpace);
+    assert(ioSpace != NULL);
+    if (ioSpace == NULL) {
+        return OS_EINVALPARAMS;
+    }
+
+    ioSpace->Type               = DeviceIoPortBased;
+    ioSpace->Access.Port.Base   = port;
+    ioSpace->Access.Port.Length = length;
+    return Syscall_IoSpaceRegister(ioSpace);
 }
 
-/* CreateDevicePinIo
- * Registers a new device port/pin io with the operating system. If this port/pin
- * overlaps any existing port/pin, this request will be denied by the system. */
 oserr_t
 CreateDevicePinIo(
-    _In_ DeviceIo_t*    IoSpace,
-    _In_ uint16_t       Port,
-    _In_ uint8_t        Pin)
+    _In_ DeviceIo_t* ioSpace,
+    _In_ uint16_t    port,
+    _In_ uint8_t     pin)
 {
-    assert(IoSpace != NULL);
-    IoSpace->Type               = DeviceIoPinBased;
-    IoSpace->Access.Pin.Port    = Port;
-    IoSpace->Access.Pin.Pin     = Pin;
-    return Syscall_IoSpaceRegister(IoSpace);
+    assert(ioSpace != NULL);
+    if (ioSpace == NULL) {
+        return OS_EINVALPARAMS;
+    }
+
+    ioSpace->Type            = DeviceIoPinBased;
+    ioSpace->Access.Pin.Port = port;
+    ioSpace->Access.Pin.Pin  = pin;
+    return Syscall_IoSpaceRegister(ioSpace);
 }
 
-/* DestroyDeviceIo
- * Unregisters a device-io with the operating system, releasing all resources
- * associated and disabling the io range for use. */
 oserr_t
 DestroyDeviceIo(
-    _In_ DeviceIo_t*    IoSpace)
+    _In_ DeviceIo_t* ioSpace)
 {
-    assert(IoSpace != NULL);
-    return Syscall_IoSpaceDestroy(IoSpace);
+    assert(ioSpace != NULL);
+    if (ioSpace == NULL) {
+        return OS_EINVALPARAMS;
+    }
+    return Syscall_IoSpaceDestroy(ioSpace);
 }
 
-/* AcquireDeviceIo
- * Tries to claim a given io-space, only one driver can claim a single io-space 
- * at a time, to avoid two drivers using the same device */
 oserr_t
 AcquireDeviceIo(
-    _Out_ DeviceIo_t*   IoSpace)
+    _InOut_ DeviceIo_t* ioSpace)
 {
-    assert(IoSpace != NULL);
-    return Syscall_IoSpaceAcquire(IoSpace);
+    assert(ioSpace != NULL);
+    if (ioSpace == NULL) {
+        return OS_EINVALPARAMS;
+    }
+    return Syscall_IoSpaceAcquire(ioSpace);
 }
 
 oserr_t
@@ -114,149 +121,198 @@ MapDeviceIo(
     return Syscall_IoSpaceMap(id, offset, length, mappingOut);
 }
 
-/* ReleaseDeviceIo
- * Tries to release a given io-space, only one driver can claim a single io-space 
- * at a time, to avoid two drivers using the same device */
 oserr_t
 ReleaseDeviceIo(
-    _In_ DeviceIo_t*    IoSpace)
+    _InOut_ DeviceIo_t* ioSpace)
 {
-    assert(IoSpace != NULL);
-    return Syscall_IoSpaceRelease(IoSpace);
+    assert(ioSpace != NULL);
+    if (ioSpace == NULL) {
+        return OS_EINVALPARAMS;
+    }
+    return Syscall_IoSpaceRelease(ioSpace);
 }
 
-/* ReadDeviceIo
- * Read data from the given io-space at <offset> with the given <length>, 
- * the offset and length must be below the size of the io-space */
+// Reads one register of 1, 2, 4 or (on 64-bit systems) 8 bytes from mapped
+// device memory. The pointers are volatile so the compiler performs exactly
+// one access of the requested width.
+static oserr_t
+__ReadMemory(
+    _In_  uintptr_t address,
+    _In_  size_t    width,
+    _Out_ size_t*   valueOut)
+{
+    switch (width) {
+        case 1:
+            *valueOut = *(volatile uint8_t*)address;
+            return OS_EOK;
+        case 2:
+            *valueOut = *(volatile uint16_t*)address;
+            return OS_EOK;
+        case 4:
+            *valueOut = *(volatile uint32_t*)address;
+            return OS_EOK;
+#if defined(__amd64__) || defined(__aarch64__)
+        case 8:
+            *valueOut = *(volatile uint64_t*)address;
+            return OS_EOK;
+#endif
+        default:
+            return OS_EINVALPARAMS;
+    }
+}
+
+// Writes one register of 1, 2, 4 or (on 64-bit systems) 8 bytes to mapped
+// device memory. Bits of value above the width are dropped.
+static oserr_t
+__WriteMemory(
+    _In_ uintptr_t address,
+    _In_ size_t    width,
+    _In_ size_t    value)
+{
+    switch (width) {
+        case 1:
+            *(volatile uint8_t*)address = (uint8_t)(value & 0xFF);
+            return OS_EOK;
+        case 2:
+            *(volatile uint16_t*)address = (uint16_t)(value & 0xFFFF);
+            return OS_EOK;
+        case 4:
+            *(volatile uint32_t*)address = (uint32_t)(value & 0xFFFFFFFF);
+            return OS_EOK;
+#if defined(__amd64__) || defined(__aarch64__)
+        case 8:
+            *(volatile uint64_t*)address = (uint64_t)value;
+            return OS_EOK;
+#endif
+        default:
+            return OS_EINVALPARAMS;
+    }
+}
+
+#if defined(__i386__) || defined(__amd64__)
+// Reads 1, 2 or 4 bytes from an x86 I/O port.
+static oserr_t
+__ReadPort(
+    _In_  uint16_t port,
+    _In_  size_t   width,
+    _Out_ size_t*  valueOut)
+{
+    switch (width) {
+        case 1:
+            *valueOut = __readbyte(port);
+            return OS_EOK;
+        case 2:
+            *valueOut = __readword(port);
+            return OS_EOK;
+        case 4:
+            *valueOut = __readlong(port);
+            return OS_EOK;
+        default:
+            return OS_EINVALPARAMS;
+    }
+}
+
+// Writes 1, 2 or 4 bytes to an x86 I/O port. Bits of value above the width
+// are dropped.
+static oserr_t
+__WritePort(
+    _In_ uint16_t port,
+    _In_ size_t   width,
+    _In_ size_t   value)
+{
+    switch (width) {
+        case 1:
+            __writebyte(port, (uint8_t)(value & 0xFF));
+            return OS_EOK;
+        case 2:
+            __writeword(port, (uint16_t)(value & 0xFFFF));
+            return OS_EOK;
+        case 4:
+            __writelong(port, (uint32_t)(value & 0xFFFFFFFF));
+            return OS_EOK;
+        default:
+            return OS_EINVALPARAMS;
+    }
+}
+#endif
+
 size_t
 ReadDeviceIo(
-    _In_ DeviceIo_t* IoSpace,
-    _In_ size_t      Offset,
-    _In_ size_t      Length)
+    _In_ DeviceIo_t* ioSpace,
+    _In_ size_t      offset,
+    _In_ size_t      length)
 {
-    size_t Result = 0;
-    
-    assert(IoSpace != NULL);
-    if (IoSpace == NULL) {
+    size_t  value = 0;
+    oserr_t status;
+
+    assert(ioSpace != NULL);
+    if (ioSpace == NULL) {
         return 0;
     }
 
-    switch (IoSpace->Type) {
-        case DeviceIoMemoryBased: {
-            uintptr_t Address = IoSpace->Access.Memory.VirtualBase + Offset;
-            assert((Offset + Length) <= IoSpace->Access.Memory.Length);
-            assert(IoSpace->Access.Memory.VirtualBase != 0);
-            switch (Length) {
-                case 1:
-                    Result = *(uint8_t*)Address;
-                    break;
-                case 2:
-                    Result = *(uint16_t*)Address;
-                    break;
-                case 4:
-                    Result = *(uint32_t*)Address;
-                    break;
-    #if defined(__amd64__) || defined(__aarch64__)
-                case 8:
-                    Result = *(uint64_t*)Address;
-                    break;
-    #endif
-                default:
-                    break;
-            }
-        } break;
+    switch (ioSpace->Type) {
+        case DeviceIoMemoryBased:
+            assert((offset + length) <= ioSpace->Access.Memory.Length);
+            assert(ioSpace->Access.Memory.VirtualBase != 0);
+            status = __ReadMemory(ioSpace->Access.Memory.VirtualBase + offset, length, &value);
+            break;
 
 #if defined(__i386__) || defined(__amd64__)
-        case DeviceIoPortBased: {
-            uint16_t Port = LOWORD(IoSpace->Access.Port.Base) + LOWORD(Offset);
-            switch (Length) {
-                case 1:
-                    Result = __readbyte(Port);
-                    break;
-                case 2:
-                    Result = __readword(Port);
-                    break;
-                case 4:
-                    Result = __readlong(Port);
-                    break;
-                default:
-                    break;
-            }
-        } break;
+        case DeviceIoPortBased:
+            status = __ReadPort(LOWORD(ioSpace->Access.Port.Base) + LOWORD(offset), length, &value);
+            break;
 #endif
 
         default:
+            status = OS_ENOTSUPPORTED;
             break;
     }
-    return Result;
+
+    // The value itself is the return value, so a failed read can only be
+    // reported in the log. It reads as zero.
+    if (status != OS_EOK) {
+        ERROR("ReadDeviceIo: io-space %u type %u, offset %zu, width %zu cannot be read (%u)",
+              ioSpace->Id, ioSpace->Type, offset, length, status);
+        return 0;
+    }
+    return value;
 }
 
-/* WriteDeviceIo
- * Write data from the given io-space at <offset> with the given <length>, 
- * the offset and length must be below the size of the io-space */
 oserr_t
 WriteDeviceIo(
-    _In_ DeviceIo_t*    IoSpace,
-    _In_ size_t         Offset,
-    _In_ size_t         Value,
-    _In_ size_t         Length)
+    _In_ DeviceIo_t* ioSpace,
+    _In_ size_t      offset,
+    _In_ size_t      value,
+    _In_ size_t      length)
 {
-    oserr_t Status = OS_EOK;
+    oserr_t status;
 
-    assert(IoSpace != NULL);
-    if (IoSpace == NULL) {
-        return 0;
+    assert(ioSpace != NULL);
+    if (ioSpace == NULL) {
+        return OS_EINVALPARAMS;
     }
 
-    switch (IoSpace->Type) {
-        case DeviceIoMemoryBased: {
-            uintptr_t Address = IoSpace->Access.Memory.VirtualBase + Offset;
-            assert((Offset + Length) <= IoSpace->Access.Memory.Length);
-            assert(IoSpace->Access.Memory.VirtualBase != 0);
-            switch (Length) {
-                case 1:
-                    *(uint8_t*)Address = (uint8_t)(Value & 0xFF);
-                    break;
-                case 2:
-                    *(uint16_t*)Address = (uint16_t)(Value & 0xFFFF);
-                    break;
-                case 4:
-                    *(uint32_t*)Address = (uint32_t)(Value & 0xFFFFFFFF);
-                    break;
-    #if defined(__amd64__) || defined(__aarch64__)
-                case 8:
-                    *(uint64_t*)Address = (uint64_t)(Value & 0xFFFFFFFFFFFFFFFF);
-                    break;
-    #endif
-                default:
-                    Status = OS_EUNKNOWN;
-                    break;
-            }
-        } break;
-        
+    switch (ioSpace->Type) {
+        case DeviceIoMemoryBased:
+            assert((offset + length) <= ioSpace->Access.Memory.Length);
+            assert(ioSpace->Access.Memory.VirtualBase != 0);
+            status = __WriteMemory(ioSpace->Access.Memory.VirtualBase + offset, length, value);
+            break;
+
 #if defined(__i386__) || defined(__amd64__)
-        case DeviceIoPortBased: {
-            uint16_t Port = LOWORD(IoSpace->Access.Port.Base) + LOWORD(Offset);
-            switch (Length) {
-                case 1:
-                    __writebyte(Port, (uint8_t)(Value & 0xFF));
-                    break;
-                case 2:
-                    __writeword(Port, (uint16_t)(Value & 0xFFFF));
-                    break;
-                case 4:
-                    __writelong(Port, (uint32_t)(Value & 0xFFFFFFFF));
-                    break;
-                default:
-                    Status = OS_EUNKNOWN;
-                    break;
-            }
-        } break;
+        case DeviceIoPortBased:
+            status = __WritePort(LOWORD(ioSpace->Access.Port.Base) + LOWORD(offset), length, value);
+            break;
 #endif
 
         default:
-            Status = OS_EUNKNOWN;
+            status = OS_ENOTSUPPORTED;
             break;
     }
-    return Status;
+
+    if (status != OS_EOK) {
+        ERROR("WriteDeviceIo: io-space %u type %u, offset %zu, width %zu cannot be written (%u)",
+              ioSpace->Id, ioSpace->Type, offset, length, status);
+    }
+    return status;
 }

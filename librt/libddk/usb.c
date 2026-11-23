@@ -21,6 +21,7 @@
 #include <ddk/devices/usb.h>
 #include <ddk/convert.h>
 #include <gracht/link/vali.h>
+#include <ddk/utils.h>
 #include <internal/_utils.h>
 #include <signal.h>
 #include <sys_usb_service_client.h>
@@ -36,13 +37,15 @@ UsbControllerRegister(
     struct vali_link_message msg          = VALI_MSG_INIT_HANDLE(GetUsbService());
     uuid_t                   serverHandle = GetNativeHandle(__crt_get_server_iod());
     struct sys_device        protoDevice;
-    oserr_t                  status;
+    oserr_t                  oserr;
+    int                      status;
 
-    status = to_sys_device(device, &protoDevice);
-    if (status != OS_EOK) {
-        return status;
+    oserr = to_sys_device(device, &protoDevice);
+    if (oserr != OS_EOK) {
+        ERROR("UsbControllerRegister: device description could not be converted: %u", oserr);
+        return oserr;
     }
-    
+
     status = sys_usb_register_controller(
         GetGrachtClient(), &msg.base,
         serverHandle,
@@ -51,7 +54,11 @@ UsbControllerRegister(
         (int)portCount
     );
     sys_device_destroy(&protoDevice);
-    return status == 0 ? OS_EOK : OS_EUNKNOWN;
+    if (status != 0) {
+        ERROR("UsbControllerRegister: device %u send failed: %i", device->Id, status);
+        return OS_EUNKNOWN;
+    }
+    return OS_EOK;
 }
 
 void
@@ -65,7 +72,10 @@ UsbControllerUnregister(
         GetGrachtClient(), &msg.base,
         deviceID
     );
-    if (status) {
+    if (status != 0) {
+        // This function cannot return an error, so a lost connection to the
+        // USB service is reported to the driver as a broken pipe.
+        ERROR("UsbControllerUnregister: device %u send failed: %i", deviceID, status);
         raise(SIGPIPE);
     }
 }
@@ -90,14 +100,16 @@ UsbHubRegister(
         characteristics
     );
     if (status != 0) {
+        ERROR("UsbHubRegister: hub %u send failed: %i", usbDevice->Base.Id, status);
         return OS_EUNKNOWN;
     }
-    
+
     status = gracht_client_await(
         GetGrachtClient(), &msg.base,
         GRACHT_AWAIT_ASYNC
     );
     if (status != 0) {
+        ERROR("UsbHubRegister: hub %u wait failed: %i", usbDevice->Base.Id, status);
         return OS_EUNKNOWN;
     }
 
@@ -105,7 +117,15 @@ UsbHubRegister(
         GetGrachtClient(), &msg.base,
         &hubStatus
     );
-    return status == 0 ? hubStatus : OS_EUNKNOWN;
+    if (status != 0) {
+        ERROR("UsbHubRegister: hub %u decode failed: %i", usbDevice->Base.Id, status);
+        return OS_EUNKNOWN;
+    }
+
+    if (hubStatus != OS_EOK) {
+        WARNING("UsbHubRegister: hub %u registration rejected: %u", usbDevice->Base.Id, hubStatus);
+    }
+    return hubStatus;
 }
 
 oserr_t
@@ -113,8 +133,13 @@ UsbHubUnregister(
     _In_ uuid_t deviceId)
 {
     struct vali_link_message msg = VALI_MSG_INIT_HANDLE(GetUsbService());
+    int                      status;
 
-    sys_usb_unregister_hub(GetGrachtClient(), &msg.base, deviceId);
+    status = sys_usb_unregister_hub(GetGrachtClient(), &msg.base, deviceId);
+    if (status != 0) {
+        ERROR("UsbHubUnregister: hub %u send failed: %i", deviceId, status);
+        return OS_EUNKNOWN;
+    }
     return OS_EOK;
 }
 
@@ -123,15 +148,19 @@ UsbEventPort(
     _In_ uuid_t  DeviceId,
     _In_ uint8_t PortAddress)
 {
-    int                      status;
     struct vali_link_message msg = VALI_MSG_INIT_HANDLE(GetUsbService());
-    
+    int                      status;
+
     status = sys_usb_port_event(
         GetGrachtClient(),
         &msg.base,
         DeviceId,
         PortAddress
     );
+    if (status != 0) {
+        ERROR("UsbEventPort: device %u port %u send failed: %i", DeviceId, PortAddress, status);
+        return OS_EUNKNOWN;
+    }
     return OS_EOK;
 }
 
@@ -140,10 +169,14 @@ UsbPortError(
     _In_ uuid_t  deviceId,
     _In_ uint8_t portAddress)
 {
-    int                      status;
     struct vali_link_message msg = VALI_MSG_INIT_HANDLE(GetUsbService());
+    int                      status;
 
     status = sys_usb_port_error(GetGrachtClient(), &msg.base, deviceId, portAddress);
+    if (status != 0) {
+        ERROR("UsbPortError: device %u port %u send failed: %i", deviceId, portAddress, status);
+        return OS_EUNKNOWN;
+    }
     return OS_EOK;
 }
 
@@ -151,12 +184,34 @@ oserr_t
 UsbQueryControllerCount(
     _Out_ int* ControllerCount)
 {
-    int                      status;
     struct vali_link_message msg = VALI_MSG_INIT_HANDLE(GetUsbService());
-    
+    int                      count;
+    int                      status;
+
+    if (ControllerCount == NULL) {
+        return OS_EINVALPARAMS;
+    }
+
     status = sys_usb_get_controller_count(GetGrachtClient(), &msg.base);
-    gracht_client_await(GetGrachtClient(), &msg.base, GRACHT_AWAIT_ASYNC);
-    sys_usb_get_controller_count_result(GetGrachtClient(), &msg.base, ControllerCount);
+    if (status != 0) {
+        ERROR("UsbQueryControllerCount: send failed: %i", status);
+        return OS_EUNKNOWN;
+    }
+
+    status = gracht_client_await(GetGrachtClient(), &msg.base, GRACHT_AWAIT_ASYNC);
+    if (status != 0) {
+        ERROR("UsbQueryControllerCount: wait failed: %i", status);
+        return OS_EUNKNOWN;
+    }
+
+    status = sys_usb_get_controller_count_result(GetGrachtClient(), &msg.base, &count);
+    if (status != 0) {
+        ERROR("UsbQueryControllerCount: decode failed: %i", status);
+        return OS_EUNKNOWN;
+    }
+
+    // The caller's count is only written once the whole request has succeeded.
+    *ControllerCount = count;
     return OS_EOK;
 }
 
@@ -165,16 +220,41 @@ UsbQueryController(
     _In_ int                    Index,
     _In_ USBControllerDevice_t* Controller)
 {
-    int                      status;
     struct vali_link_message msg = VALI_MSG_INIT_HANDLE(GetUsbService());
     uint32_t                 controllerLength = sizeof(struct USBControllerDevice);
-    
+    int                      status;
+
+    if (Controller == NULL) {
+        return OS_EINVALPARAMS;
+    }
+
     status = sys_usb_get_controller(GetGrachtClient(), &msg.base, Index);
-    gracht_client_await(GetGrachtClient(), &msg.base, GRACHT_AWAIT_ASYNC);
-    sys_usb_get_controller_result(GetGrachtClient(), &msg.base, (uint8_t*)Controller, &controllerLength);
+    if (status != 0) {
+        ERROR("UsbQueryController: controller %i send failed: %i", Index, status);
+        return OS_EUNKNOWN;
+    }
+
+    status = gracht_client_await(GetGrachtClient(), &msg.base, GRACHT_AWAIT_ASYNC);
+    if (status != 0) {
+        ERROR("UsbQueryController: controller %i wait failed: %i", Index, status);
+        return OS_EUNKNOWN;
+    }
+
+    status = sys_usb_get_controller_result(
+        GetGrachtClient(),
+        &msg.base,
+        (uint8_t*)Controller,
+        &controllerLength
+    );
+    if (status != 0) {
+        ERROR("UsbQueryController: controller %i decode failed: %i", Index, status);
+        return OS_EUNKNOWN;
+    }
 
     // Ensure that the returned controller structure has the expected size
     if (controllerLength != sizeof(struct USBControllerDevice)) {
+        ERROR("UsbQueryController: controller %i returned %u bytes, expected %zu",
+              Index, controllerLength, sizeof(struct USBControllerDevice));
         return OS_EPROTOCOL;
     }
     return OS_EOK;

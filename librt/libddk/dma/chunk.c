@@ -16,11 +16,17 @@
  *
  * Chunked SHM mapping for drivers that move a large client buffer one piece at
  * a time. Built only from the public DMAMapSHMDirect and DMAMapSHM calls, so
- * it keeps no state and needs no private DMA structures.
+ * it keeps no mapping state (only a flag for its first bounce log line) and
+ * needs no private DMA structures.
  */
 
 #include <ddk/dma.h>
 #include <ddk/utils.h>
+#include <stdatomic.h>
+#include <stdbool.h>
+
+// Set once the first bounce of this process has been logged.
+static atomic_bool g_bounceLogged = false;
 
 static size_t
 __RoundDownToBlocks(
@@ -173,6 +179,14 @@ DMAMapSHMChunk(
         return status;
     }
 
+    // The first bounce of a process is logged at NOTICE level, so bring-up
+    // sees that the device cannot reach the client's pages (on a Raspberry
+    // Pi 4 the SD host reaches only the first 1 GiB of RAM). Later ones are
+    // TRACE lines only, as they can come with every request.
+    if (!atomic_exchange(&g_bounceLogged, true)) {
+        NOTICE("DMAMapSHMChunk: buffer %u, offset %zu: direct map failed (%u), bouncing %zu bytes, "
+            "later bounces are not logged", buffer->ID, offset, status, bounceLength);
+    }
     TRACE("DMAMapSHMChunk: buffer %u, offset %zu, direct map failed (%u), using %zu bytes with bounce",
         buffer->ID, offset, status, bounceLength);
     return __MapWithBounce(

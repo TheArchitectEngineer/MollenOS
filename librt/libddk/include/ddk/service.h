@@ -22,8 +22,8 @@
  *   and functionality, refer to the individual things for descriptions
  */
 
-#ifndef __DDK_SERVICES_SERVICE_H__
-#define __DDK_SERVICES_SERVICE_H__
+#ifndef __DDK_SERVICE_H__
+#define __DDK_SERVICE_H__
 
 #include <ddk/ddkdefs.h>
 
@@ -46,7 +46,6 @@ struct ServiceStartupOptions {
 // While we no longer hardcode these paths in the code when setting them, we still hardcode
 // them when discovering. This means that we cannot remove these just yet, and instead they must
 // match the service YAML paths.
-#define SERVICE_SESSION_PATH "/service/session"
 #define SERVICE_DEVICE_PATH "/service/device"
 #define SERVICE_USB_PATH "/service/usb"
 #define SERVICE_PROCESS_PATH "/service/process"
@@ -56,7 +55,6 @@ struct ServiceStartupOptions {
 #define SERVICE_SERVED_PATH "/service/serve"
 
 // Service targets that are available for Vali
-DDKDECL(uuid_t, GetSessionService(void));
 DDKDECL(uuid_t, GetDeviceService(void));
 DDKDECL(uuid_t, GetUsbService(void));
 DDKDECL(uuid_t, GetProcessService(void));
@@ -64,31 +62,33 @@ DDKDECL(uuid_t, GetFileService(void));
 DDKDECL(uuid_t, GetNetService(void));
 DDKDECL(uuid_t, GetSysLogService(void));
 
-// When a service is required for a module it is
-// possible to wait for it to be available. Be careful
-// about not giving a timeout
-DDKDECL(oserr_t,
-WaitForSessionService(
-    _In_ size_t Timeout));
+/**
+ * @brief Waits until the service has registered its handle path. The path is
+ * looked up every 10 ms until it is found.
+ *
+ * @param timeout Longest time to wait, in milliseconds. Zero waits forever.
+ * @return OS_EOK once the service is found, or OS_ETIMEOUT when it did not
+ *         appear in time.
+ */
 DDKDECL(oserr_t,
 WaitForDeviceService(
-    _In_ size_t Timeout));
+    _In_ size_t timeout));
 DDKDECL(oserr_t,
 WaitForUsbService(
-    _In_ size_t Timeout));
+    _In_ size_t timeout));
 DDKDECL(oserr_t,
 WaitForProcessService(
-    _In_ size_t Timeout));
+    _In_ size_t timeout));
 DDKDECL(oserr_t,
 WaitForFileService(
-    _In_ size_t Timeout));
+    _In_ size_t timeout));
 DDKDECL(oserr_t,
 WaitForNetService(
-    _In_ size_t Timeout));
+    _In_ size_t timeout));
 DDKDECL(oserr_t,
 WaitForSysLogService(
-        _In_ size_t Timeout));
+    _In_ size_t timeout));
 
 _CODE_END
 
-#endif //!__DDK_SERVICES_SERVICE_H__
+#endif //!__DDK_SERVICE_H__

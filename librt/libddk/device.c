@@ -15,7 +15,6 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include <errno.h>
 #include <ddk/convert.h>
 #include <ddk/service.h>
 #include <ddk/utils.h>
@@ -30,53 +29,87 @@ RegisterDevice(
     _In_ unsigned int flags)
 {
     struct vali_link_message msg = VALI_MSG_INIT_HANDLE(GetDeviceService());
-    int                      status;
+    struct sys_device        sysDevice;
     oserr_t                  oserr;
     uuid_t                   id;
-    struct sys_device        sysDevice;
+    int                      status;
 
-    if (to_sys_device(device, &sysDevice) != OS_EOK) {
-        return UUID_INVALID;
-    }
-
-    status = sys_device_register(GetGrachtClient(), &msg.base, &sysDevice,  flags);
-    gracht_client_await(GetGrachtClient(), &msg.base, GRACHT_AWAIT_ASYNC);
-    sys_device_register_result(GetGrachtClient(), &msg.base, &oserr, &id);
-
-    sys_device_destroy(&sysDevice);
-    if (status) {
-        ERROR("[ddk] [device] failed to register new device, errno %i", errno);
-        return UUID_INVALID;
-    }
-    
+    oserr = to_sys_device(device, &sysDevice);
     if (oserr != OS_EOK) {
+        ERROR("RegisterDevice: device description could not be converted: %u", oserr);
         return UUID_INVALID;
     }
-    
+
+    // The description is copied into the message while it is sent, so it can
+    // be freed right after the send, whether the send worked or not.
+    status = sys_device_register(GetGrachtClient(), &msg.base, &sysDevice, flags);
+    sys_device_destroy(&sysDevice);
+    if (status != 0) {
+        ERROR("RegisterDevice: send failed: %i", status);
+        return UUID_INVALID;
+    }
+
+    status = gracht_client_await(GetGrachtClient(), &msg.base, GRACHT_AWAIT_ASYNC);
+    if (status != 0) {
+        ERROR("RegisterDevice: wait failed: %i", status);
+        return UUID_INVALID;
+    }
+
+    status = sys_device_register_result(GetGrachtClient(), &msg.base, &oserr, &id);
+    if (status != 0) {
+        ERROR("RegisterDevice: decode failed: %i", status);
+        return UUID_INVALID;
+    }
+
+    if (oserr != OS_EOK) {
+        WARNING("RegisterDevice: registration rejected: %u", oserr);
+        return UUID_INVALID;
+    }
+
+    // The id is only stored once the device service has confirmed the device.
     device->Id = id;
     return id;
 }
 
 oserr_t
 UnregisterDevice(
-        _In_ uuid_t deviceId)
+    _In_ uuid_t deviceId)
 {
     struct vali_link_message msg = VALI_MSG_INIT_HANDLE(GetDeviceService());
-    oserr_t                  oserr;
-    
-    sys_device_unregister(GetGrachtClient(), &msg.base, deviceId);
-    gracht_client_await(GetGrachtClient(), &msg.base, GRACHT_AWAIT_ASYNC);
-    sys_device_unregister_result(GetGrachtClient(), &msg.base, &oserr);
+    oserr_t                  oserr = OS_EPROTOCOL;
+    int                      status;
+
+    status = sys_device_unregister(GetGrachtClient(), &msg.base, deviceId);
+    if (status != 0) {
+        WARNING("UnregisterDevice: device %u send failed: %i", deviceId, status);
+        return OS_EPROTOCOL;
+    }
+
+    status = gracht_client_await(GetGrachtClient(), &msg.base, GRACHT_AWAIT_ASYNC);
+    if (status != 0) {
+        WARNING("UnregisterDevice: device %u wait failed: %i", deviceId, status);
+        return OS_EPROTOCOL;
+    }
+
+    status = sys_device_unregister_result(GetGrachtClient(), &msg.base, &oserr);
+    if (status != 0) {
+        WARNING("UnregisterDevice: device %u decode failed: %i", deviceId, status);
+        return OS_EPROTOCOL;
+    }
+
+    if (oserr != OS_EOK) {
+        WARNING("UnregisterDevice: device %u removal rejected: %u", deviceId, oserr);
+    }
     return oserr;
 }
 
 oserr_t
 IoctlDeviceEx(
-        _In_    uuid_t       deviceId,
-        _In_    int          direction,
-        _In_    unsigned int offset,
-        _InOut_ size_t*      value,
-        _In_    size_t       width)
+    _In_    uuid_t       deviceId,
+    _In_    int          direction,
+    _In_    unsigned int offset,
+    _InOut_ size_t*      value,
+    _In_    size_t       width)
 {
     struct vali_link_message msg = VALI_MSG_INIT_HANDLE(GetDeviceService());
     oserr_t                  oserr = OS_EPROTOCOL;

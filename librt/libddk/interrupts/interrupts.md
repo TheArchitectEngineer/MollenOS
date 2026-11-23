@@ -15,38 +15,59 @@ handlers or enabling the object. This applies to every source kind.
 ## Implementation and state rules
 
 `interrupt.c` manages allocation storage, handler and resource configuration,
-and the shared enable/disable/destroy sequence. `interrupt-pci.c` handles PCI
-capability queries, mode selection and fallback, vector negotiation, message
-programming and requests to the PCI bus driver. Its public entry points use the
-same allocator and cleanup sequence.
+and the shared enable/disable/destroy sequence. `pci.c` handles PCI capability
+queries, mode selection and fallback, vector negotiation, message programming
+and requests to the PCI bus driver. Its public entry points use the same
+allocator and cleanup sequence.
 
-The internal interface is declared in `interrupt-private.h`, which is not
-installed. Commands use a bus-neutral enum and are translated into PCI or
-platform wire requests at this interface. PCI strategy constants are declared
-in `types/interrupt-pci.h` so drivers and bus drivers can use them without adding
-PCI capabilities to the common interrupt types.
+The internal interface is declared in `private.h`, which is not installed.
+Requests to a bus driver use the bus-neutral `enum __InterruptBusRequest` and
+are translated into PCI or platform ioctl requests at this interface. PCI
+strategy constants are declared in `types/interrupt-pci.h` so drivers and bus
+drivers can use them without adding PCI capabilities to the common interrupt
+types.
 
-Allocation phase (`Preparing`, `Ready`, `Destroying`) is separate from pending
-cleanup. An object in Destroying can still have enabled handlers or a bus
-reservation whose state is uncertain. Only the shared lifecycle code updates
-this state, according to the following rules:
+`struct DeviceInterruptState` keeps three separate states. Only the shared
+enable/disable/destroy code updates them.
 
-- Enabled requires Bound. Bound also covers partial mappings left after failure.
-- When a public call returns with Bound set and Enabled clear, PendingCleanup
-  must be set.
-- Before calling the kernel to bind handlers, record that cleanup may be needed.
-  If a bus driver reply is lost, keep the reservation until stop or release is
+- `Phase` (`Preparing`, `Ready`, `Destroying`) says where the allocation is in
+  its life. Destroying cannot return to Ready. A successful Disable does not
+  undo Destroy.
+- `BusReservation` (`None`, `Held`) says whether the bus driver holds, or may
+  hold, a reservation. It is set to Held before the reserve request is sent. If
+  a bus driver reply is lost, the reservation stays Held until a release is
   confirmed.
-- The kernel-stop helper clears mapping and delivery state only after all stop
-  and unmap operations succeed. On failure, keep enough state to retry.
-- Before editing a Ready object, complete any pending cleanup and remove its
-  mappings. This also applies when a bus driver stop failed before any handler
-  was bound.
-- Destroying cannot return to Ready. A successful Disable does not undo Destroy.
+- `Delivery` says how far delivery is set up and whether a stop still has to
+  finish.
 
-Internal assertions check these mapping and delivery rules. Fault-injection
-tests also check them in release builds. Callers must serialize operations on
-each object and treat the public result fields as read-only.
+| Delivery | Handlers bound in the kernel | Kernel delivers | Stop still needed |
+|---|---|---|---|
+| `Stopped` | no | no | no |
+| `StopPending` | no | no | yes |
+| `Bound` | yes, or partly after a failed bind | no | yes |
+| `KernelEnabled` | yes | yes | yes |
+| `Enabled` | yes | yes | no |
+
+The delivery state follows these rules:
+
+- Enable moves to Bound before the first call that binds a handler, so a failed
+  bind is always followed by a kernel stop.
+- Enable moves to KernelEnabled once the kernel has enabled delivery, and to
+  Enabled only after the bus driver has confirmed its side.
+- Disable leaves Stopped and Enabled before it sends its first request. A failed
+  stop therefore never looks like a finished stop or like confirmed delivery.
+- The kernel-stop helper is the only code that returns to Stopped, and only
+  after the kernel has stopped delivery and unbound every handler. On failure
+  the state is kept so the stop can be tried again.
+- Handlers and resources of a Ready object can only be changed in Stopped. This
+  also applies when a bus driver stop failed before any handler was bound
+  (StopPending).
+- An object in Destroying can still be in any delivery state, and can still
+  hold a bus reservation.
+
+Fault-injection tests check these rules in release builds. Callers must
+serialize operations on each object and treat the public result fields as
+read-only.
 
 ## Driver API
 

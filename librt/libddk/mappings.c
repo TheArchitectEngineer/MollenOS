@@ -35,9 +35,11 @@ CreateMemorySpace(
     oserr_t                   oserr;
 
     if (msHandleOut == NULL || securityHandleOut == NULL) {
-        return OS_EUNKNOWN;
+        return OS_EINVALPARAMS;
     }
 
+    // Both results are written together, 
+    // and only when the syscall succeeded.
     oserr = Syscall_CreateMemorySpace(flags, &result);
     if (oserr != OS_EOK) {
         return oserr;
@@ -50,23 +52,23 @@ CreateMemorySpace(
 
 oserr_t
 GetMemorySpaceForThread(
-        _In_  uuid_t  Thread,
-        _Out_ uuid_t* Handle)
+    _In_  uuid_t  thread,
+    _Out_ uuid_t* handleOut)
 {
-    if (Handle == NULL) {
-        return OS_EUNKNOWN;
+    if (handleOut == NULL) {
+        return OS_EINVALPARAMS;
     }
-    return Syscall_GetMemorySpaceForThread(Thread, Handle);
+    return Syscall_GetMemorySpaceForThread(thread, handleOut);
 }
 
 oserr_t
 CreateMemoryMapping(
-        _In_  uuid_t                          Handle,
-        _In_  struct MemoryMappingParameters* Parameters,
-        _Out_ void**                          AddressOut)
+    _In_  uuid_t                          handle,
+    _In_  struct MemoryMappingParameters* parameters,
+    _Out_ void**                          addressOut)
 {
-    if (Parameters == NULL || AddressOut == NULL) {
-        return OS_EUNKNOWN;
+    if (parameters == NULL || addressOut == NULL) {
+        return OS_EINVALPARAMS;
     }
-    return Syscall_CreateMemorySpaceMapping(Handle, Parameters, AddressOut);
+    return Syscall_CreateMemorySpaceMapping(handle, parameters, addressOut);
 }

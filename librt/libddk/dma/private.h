@@ -42,48 +42,70 @@ struct __DmaResource {
     SHMHandle_t*          Storage;
 };
 
+// Where a mapping is in its life. Only region mappings ever leave Mapped
+// before they are freed, because only their unmap can be blocked half way.
+enum __DmaMappingState {
+    // The mapping can be used, and region sessions can be opened on it.
+    DmaMappingStateMapped,
+    // DMAUnmap has started on a region mapping. If releasing it fails, the
+    // mapping stays in this state and no new region session can be opened
+    // until the unmap is tried again and succeeds.
+    DmaMappingStateUnmapping
+};
+
 // Tracks a DMA mapping created by DMAMapSHM, DMAMapSHMDirect, DMAMapSHMPersistent,
 // or DMAMapSHMRegions. Setup and teardown calls on the mapping must be serialized.
 // Individual region sessions serialize their own transfers independently.
 struct DMAMapping {
     // Kernel handle and cached device segments shared with DMABuffer.
-    struct __DmaResource Resource;
+    struct __DmaResource   Resource;
     // DMA_MAP_* flags fixed when the mapping was created.
-    unsigned int         Flags;
+    unsigned int           Flags;
     // Mapped byte count, used to check streaming transfer ranges.
-    size_t               Length;
+    size_t                 Length;
     // Widest data direction allowed for transfers on this mapping.
-    enum DMADirection    Direction;
+    enum DMADirection      Direction;
     // Number of open DMARegionSession_t objects referencing this mapping.
     // DMAUnmap refuses to run while any region session is still open.
-    unsigned int         Sessions;
-    // Set when DMAUnmap begins closing a region mapping so failed unmaps block
-    // new region sessions until the unmap retry finishes.
-    bool                 Closing;
+    unsigned int           Sessions;
+    // See enum __DmaMappingState.
+    enum __DmaMappingState State;
+};
+
+// Where a context is in its life. A context only moves forward through these
+// states, and is freed once DMAClose has released everything.
+enum __DmaContextState {
+    // The open succeeded. Buffers and mappings can be created.
+    DmaContextStateOpen,
+    // The reply to the binding request was lost during open, so it is unknown
+    // whether the device service granted the binding. The context can not
+    // create buffers or mappings. DMAClose sends the same request again to
+    // learn the outcome before it releases anything.
+    DmaContextStateBindingUnknown,
+    // DMAClose has started, or the open failed and only cleanup is left. No
+    // new buffers or mappings can be created.
+    DmaContextStateClosing
 };
 
 // The driver's DMA access to one device. At most one context exists per device
 // in this process. All contexts are linked in a registry guarded by a lock.
 struct DMAContext {
-    struct DMAContext*    Next;
-    uuid_t                Device;
+    struct DMAContext*     Next;
+    uuid_t                 Device;
     // Kernel handle of the open context. UUID_INVALID until the open succeeds.
-    uuid_t                Handle;
+    uuid_t                 Handle;
     // Identifies the binding request. If the reply is lost, the same ID is sent
     // again so the service returns the same binding instead of making a new one.
-    uint64_t              RequestId;
+    uint64_t               RequestId;
     // Permission the device service gave this process to open a context.
-    OSDmaBindingResult_t  Binding;
-    // Set when the binding reply was lost and the outcome is still unknown.
-    bool                  BindingPending;
-    // Set once close has started or the context only exists for cleanup.
-    // No new buffers or mappings can be created from a closing context.
-    bool                  Closing;
+    OSDmaBindingResult_t   Binding;
+    // See enum __DmaContextState.
+    enum __DmaContextState State;
     // Number of buffers and mappings from this context that are not released yet.
     // Resources waiting in Pending are included.
-    atomic_uint           Children;
+    atomic_uint            Children;
     // Resources whose creation failed and whose cleanup must be retried.
-    struct __DmaResource* Pending;
+    struct __DmaResource*  Pending;
 };
 
 /**
@@ -111,4 +133,4 @@ oserr_t
 __DmaCollect(
     _In_ struct DMAContext* context);
 
-#endif
+#endif //!__DDK_DMA_PRIVATE_H__
