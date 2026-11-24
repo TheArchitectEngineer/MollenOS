@@ -25,7 +25,7 @@
 #include "buffers.h"
 #include <os/handle.h>
 #include <internal/_shm_transfer.h>
-#include <ddk/convert/grants.h>
+#include <os/convert/grants.h>
 #include <os/memory.h>
 #include <os/mollenos.h>
 #include <os/shm.h>

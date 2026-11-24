@@ -23,6 +23,8 @@
 #ifndef __OS_USCHED_H__
 #define __OS_USCHED_H__
 
+#include <os/osdefs.h>
+
 // imported from time.h
 struct timespec;
 
@@ -70,5 +72,20 @@ CRTDECL(void, usched_wait_async(void));
  * @return The ID of the scheduler notification handle.
  */
 CRTDECL(uuid_t, usched_notification_handle(void));
+
+/**
+ * @brief Turns a delay into the absolute UTC time that usched_job_sleep,
+ * usched_timedwait and usched_cnd_timedwait take. Keep deadlines that must
+ * hold on the monotonic clock (DDKGetTimeUs in ddk/time.h), and use this only
+ * to bound one wait. A step of the UTC clock can then make that one wait
+ * shorter or longer, but never moves the deadline.
+ *
+ * @param microseconds Delay from now in microseconds.
+ * @param until Receives the current UTC time plus the delay.
+ * @return 0 on success.
+ *         -1 with errno set to EINVAL if until is NULL, or to the error from
+ *         timespec_get if the UTC clock cannot be read. until is unchanged then.
+ */
+CRTDECL(int, usched_deadline_after_us(uint64_t microseconds, struct timespec* until));
 
 #endif //!__OS_USCHED_H__

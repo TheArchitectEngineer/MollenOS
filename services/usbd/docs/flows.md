@@ -46,7 +46,7 @@ sequenceDiagram
     Note over Worker: Wait 10 ms, clear pending recovery
     Worker->>Host: Read descriptors and set configuration
     Host-->>Worker: Transfer results
-    Worker->>Devices: RegisterDevice with LOADDRIVER
+    Worker->>Devices: DeviceRegister with LOADDRIVER
     Devices-->>Worker: Device ID
     Worker-->>Handler: Mark Done and wake handler
 ```
@@ -85,11 +85,12 @@ has a nonzero USB address. That call supplies controller-side hub information
 before the worker processes the next command. Subsequent downstream port events
 use the hub driver for port operations and the controller driver for transfers.
 
-Current limit: `UsbCoreHubsRegisterAndConfigure` waits for the configuration RPC,
-but does not act on its send/wait/result errors or returned controller status.
-Registration is not rolled back on controller configuration failure. The ordering
-guarantee therefore means the configuration attempt finishes before the next
-command, not that configuration necessarily succeeded.
+Registration replies only after controller configuration completes. Send, wait,
+result and hardware errors remove the new hub record and return an error to the
+hub driver. The driver starts its interrupt pipe and port scan only after a
+successful reply. xHCI yields while waiting for the normal command-completion
+interrupt, with a bounded timeout. Slot-context diagnostics show the input and
+hardware readback before port-power requests begin.
 
 ## Controller queries
 
@@ -108,7 +109,7 @@ pointer-valued fields do not expose usable remote memory.
 On a disconnect event, `UsbCorePortEvent` queries current status, destroys the
 recorded device, and updates the port's status. `UsbCoreDevicesDestroy` performs:
 
-1. `UnregisterDevice` if a device-service ID was assigned.
+1. `DeviceUnregister` if a device-service ID was assigned.
 2. `UsbDetachDevice` while controller and device context still exist.
 3. Release the nonzero USB address.
 4. Free identification strings and the device object, then clear `port->Device`.

@@ -1,5 +1,6 @@
 add_library(libos-uthreads STATIC
         cond.c
+        deadline.c
         job.c
         mutex.c
         once.c

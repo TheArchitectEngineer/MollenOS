@@ -32,6 +32,8 @@ usched_rwlock_w_promote
 usched_rwlock_w_demote
 usched_rwlock_w_lock
 usched_rwlock_w_unlock
+usched_deadline_after_us
+usched_job_sleep_us
 thrd_create
 OSMount
 OSUnmount

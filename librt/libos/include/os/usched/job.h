@@ -150,6 +150,17 @@ CRTDECL(int, usched_job_signal(uuid_t jobID, int signal));
 CRTDECL(int, usched_job_sleep(const struct timespec* until));
 
 /**
+ * @brief Sleeps the current job for at least the given time. Other jobs run on
+ * the execution unit meanwhile. The wake-up time is set on the UTC clock with
+ * usched_deadline_after_us, so a step of that clock can make the sleep shorter
+ * or longer.
+ * @param microseconds Time to sleep in microseconds.
+ * @return 0 If the sleep was done.
+ *         -1 If the UTC clock could not be read, consult errno. The job did not sleep.
+ */
+CRTDECL(int, usched_job_sleep_us(uint64_t microseconds));
+
+/**
  * @brief Used for checking by the currently running job if anyone has requested it
  * to be cancelled. Cancellation policy is co-operative, so that means the job is not
  * required to respect any cancellation requests, but rather should be used on a

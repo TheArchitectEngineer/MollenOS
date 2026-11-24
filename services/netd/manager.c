@@ -25,8 +25,8 @@
 
 //#define __TRACE
 
-#include <ddk/convert/grants.h>
-#include <internal/_service.h>
+#include <os/convert/grants.h>
+#include <ddk/service-caller.h>
 #include <internal/_tls.h>
 #include <os/notification_queue.h>
 #include <os/handle.h>
@@ -389,7 +389,7 @@ __SocketCaller(
     const struct gracht_security_context* caller;
 
     caller = gracht_server_get_security_context(message);
-    if (!__IsAuthenticatedCaller(caller)) {
+    if (!ServiceIsAuthenticatedCaller(caller)) {
         return OS_EPERMISSIONS;
     }
     *groupOut = caller->principal;

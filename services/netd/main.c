@@ -41,14 +41,14 @@
 static void
 __SubscribeToDeviceService(void)
 {
-    struct vali_link_message context = VALI_MSG_INIT_HANDLE(GetDeviceService());
+    struct vali_link_message context = VALI_MSG_INIT_HANDLE(OSServiceGetDevice());
     sys_device_subscribe(GetGrachtClient(), &context.base);
 }
 
 static void
 __DiscoverAdapters(void)
 {
-    struct vali_link_message context = VALI_MSG_INIT_HANDLE(GetDeviceService());
+    struct vali_link_message context = VALI_MSG_INIT_HANDLE(OSServiceGetDevice());
     sys_device_get_devices_by_protocol(
         GetGrachtClient(),
         &context.base,
@@ -81,7 +81,7 @@ void ServiceInitialize(
     }
 
     // Wait for the device service to be available
-    if (WaitForDeviceService(1000) != OS_EOK) {
+    if (OSServiceWaitForDevice(1000) != OS_EOK) {
         ERROR("[netd] device service not available");
         exit(-1);
     }

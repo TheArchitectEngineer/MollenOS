@@ -88,6 +88,7 @@ add_library(libddk
 
     utils/bufferpool.c
     utils/crc32.c
+    utils/time.c
 )
 add_dependencies(libddk service_clients contract_clients)
 target_include_directories(libddk
