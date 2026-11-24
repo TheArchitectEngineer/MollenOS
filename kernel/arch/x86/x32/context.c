@@ -28,6 +28,7 @@
 #include <debug.h>
 #include <log.h>
 #include <memoryspace.h>
+#include <stack_cache.h>
 #include <string.h>
 #include <threading.h>
 
@@ -275,6 +276,41 @@ error:
     return oserr;
 }
 
+// Kernel stacks of the default size come from the stack cache when it has
+// one. A cached stack is already mapped and fully committed. Every other
+// stack is mapped and committed by __AllocateStackInMemory.
+static oserr_t
+__AllocateStack(
+        _In_  int        contextType,
+        _In_  size_t     contextReservedSize,
+        _In_  size_t     contextComittedSize,
+        _Out_ uintptr_t* contextAddressOut)
+{
+    unsigned int placementFlags;
+    unsigned int memoryFlags;
+    oserr_t      oserr;
+
+    if (contextType == THREADING_CONTEXT_LEVEL0) {
+        oserr = StackCacheAllocate(contextReservedSize, contextAddressOut);
+        if (oserr == OS_EOK) {
+            return OS_EOK;
+        } else if (oserr != OS_ENOENT) {
+            // OS_ENOENT means the cache has no stack of this size. Map a new one.
+            ERROR("__AllocateStack: stack cache failed with %u", oserr);
+            return oserr;
+        }
+    }
+
+    __GetContextFlags(contextType, &placementFlags, &memoryFlags);
+    return __AllocateStackInMemory(
+        placementFlags,
+        memoryFlags,
+        contextReservedSize,
+        contextComittedSize,
+        contextAddressOut
+    );
+}
+
 Context_t*
 ArchThreadContextIdle(void)
 {
@@ -296,13 +332,9 @@ ArchThreadContextCreate(
     _In_ int    contextType,
     _In_ size_t contextSize)
 {
-    oserr_t      oserr;
-    uintptr_t    contextAddress;
-    unsigned int placementFlags;
-    unsigned int memoryFlags;
-    size_t       committedSize = PAGE_SIZE;
-
-    __GetContextFlags(contextType, &placementFlags, &memoryFlags);
+    oserr_t   oserr;
+    uintptr_t contextAddress;
+    size_t    committedSize = PAGE_SIZE;
 
     // Kernel stacks must be fully committed as we use the kernel
     // stacks for dealing with page-faults.
@@ -310,9 +342,8 @@ ArchThreadContextCreate(
         committedSize = contextSize;
     }
 
-    oserr = __AllocateStackInMemory(
-        placementFlags,
-        memoryFlags,
+    oserr = __AllocateStack(
+        contextType,
         contextSize,
         committedSize,
         &contextAddress
@@ -351,8 +382,6 @@ ArchThreadContextFork(
     uintptr_t    newStackTop;
     uintptr_t    stack      = CONTEXT_SP(returnContext);
     size_t       stackUsage = stackTop - stack;
-    unsigned int placementFlags;
-    unsigned int memoryFlags;
     size_t       committedSize;
 
     TRACE("ArchThreadContextFork(stackTop=0x%x, stack=0x%x, stackUsage=0x%x)",
@@ -366,8 +395,6 @@ ArchThreadContextFork(
         return OS_EINVALPARAMS;
     }
 
-    __GetContextFlags(contextType, &placementFlags, &memoryFlags);
-
     if (contextType == THREADING_CONTEXT_LEVEL0) {
         // Kernel stacks must be fully committed as we use the kernel
         // stacks for dealing with page-faults.
@@ -378,9 +405,8 @@ ArchThreadContextFork(
     }
 
     // Commit enough space for the extra Context_t we add below
-    oserr = __AllocateStackInMemory(
-            placementFlags,
-            memoryFlags,
+    oserr = __AllocateStack(
+            contextType,
             contextSize,
             committedSize,
             &contextAddress
@@ -429,6 +455,7 @@ ArchThreadContextDestroy(
         _In_ size_t     contextSize)
 {
     uintptr_t contextAddress;
+    oserr_t   oserr;
 
     // do not touch LEVEL1+SIGNAL as they are mapped as thread memory in another space
     if (!context || contextType != THREADING_CONTEXT_LEVEL0) {
@@ -442,11 +469,22 @@ ArchThreadContextDestroy(
     contextAddress += sizeof(Context_t);
     contextAddress -= contextSize;
 
-    MemorySpaceUnmap(
+    // Keep the stack mapped for the next thread when the cache has room.
+    // Otherwise unmap it, which synchronizes the change with every core.
+    oserr = StackCacheRelease(contextAddress + contextSize, contextSize);
+    if (oserr == OS_EOK) {
+        return;
+    }
+    TRACE("ArchThreadContextDestroy: stack not cached (%u), unmapping it", oserr);
+
+    oserr = MemorySpaceUnmap(
             GetCurrentMemorySpace(),
             contextAddress,
             contextSize
     );
+    if (oserr != OS_EOK) {
+        ERROR("ArchThreadContextDestroy: failed to unmap stack 0x%" PRIxIN ": %u", contextAddress, oserr);
+    }
 }
 
 oserr_t

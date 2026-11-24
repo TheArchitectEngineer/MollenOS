@@ -24,6 +24,7 @@
 #include <heap.h>
 #include <machine.h>
 #include <memoryspace.h>
+#include <stack_cache.h>
 #include <string.h>
 #include <threading.h>
 #include "private.h"
@@ -149,6 +150,8 @@ ArchThreadYield(void)
  *
  * Uses the current memory space. Kernel stacks use shared kernel addresses;
  * userspace stacks use the thread-specific range and permit userspace access.
+ * A kernel stack of THREADING_KERNEL_STACK_SIZE is taken from the stack cache
+ * when it has one. A cached stack is already mapped and fully committed.
  * Mapping or commit failure releases the reservation acquired by this call.
  *
  * @param contextType THREADING_CONTEXT_LEVEL0 for a kernel stack; otherwise userspace.
@@ -172,6 +175,18 @@ __AllocateStack(
     uintptr_t      top;
     uintptr_t*     pages;
     oserr_t        status;
+
+    // Every kernel stack is fully committed, so a cached stack satisfies any
+    // committed size. OS_ENOENT means the cache has no stack of this size.
+    if (contextType == THREADING_CONTEXT_LEVEL0) {
+        status = StackCacheAllocate(reserved, topOut);
+        if (status == OS_EOK) {
+            return OS_EOK;
+        } else if (status != OS_ENOENT) {
+            ERROR("__AllocateStack: stack cache failed with %u", status);
+            return status;
+        }
+    }
 
     // A userspace stack must be accessible at EL0 and placed in this thread's
     // private range. Kernel stacks stay inaccessible to userspace.
@@ -502,8 +517,10 @@ ArchThreadContextFork(
 /**
  * @brief Releases the stack mapping associated with a kernel base context.
  *
- * Only kernel stack mappings are explicitly unmapped here. Userspace mappings
- * are left unchanged by this function. The context must no longer be in use.
+ * Only kernel stack mappings are released here. Userspace mappings are left
+ * unchanged by this function. The context must no longer be in use. A kernel
+ * stack goes to the stack cache when it has room and stays mapped. Otherwise
+ * it is unmapped, which synchronizes the change with every running core.
  *
  * @param context Base context at the top of the stack, or NULL for no work.
  * @param contextType THREADING_CONTEXT_LEVEL0 to unmap the kernel stack.
@@ -515,15 +532,31 @@ ArchThreadContextDestroy(
     _In_ int        contextType,
     _In_ size_t     contextSize)
 {
+    uintptr_t top;
+    oserr_t   status;
+
+    // Skip absent and userspace contexts.
+    if (!context || contextType != THREADING_CONTEXT_LEVEL0) {
+        return;
+    }
+
     // Only the base context has the fixed relationship to the stack's top.
-    // Add its size to recover that top, then subtract the reservation size to
-    // find the mapping's lower address. Skip absent and userspace contexts.
-    if (context && contextType == THREADING_CONTEXT_LEVEL0) {
-        MemorySpaceUnmap(
-            GetCurrentMemorySpace(),
-            (uintptr_t)context + sizeof(*context) - contextSize,
-            contextSize
-        );
+    // Add its size to recover that top. The mapping's lower address is the
+    // top minus the reservation size.
+    top = (uintptr_t)context + sizeof(Context_t);
+    status = StackCacheRelease(top, contextSize);
+    if (status == OS_EOK) {
+        return;
+    }
+    TRACE("ArchThreadContextDestroy: stack not cached (%u), unmapping it", status);
+
+    status = MemorySpaceUnmap(
+        GetCurrentMemorySpace(),
+        top - contextSize,
+        contextSize
+    );
+    if (status != OS_EOK) {
+        ERROR("ArchThreadContextDestroy: failed to unmap stack 0x%" PRIxIN ": %u", top - contextSize, status);
     }
 }
 
