@@ -14,8 +14,8 @@
  * You should have received a copy of the GNU General Public License
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  *
- * Controller creation and destruction. GenetCreate runs the setup steps in
- * order and records how far it got in GenetController_t.State. GenetDestroy
+ * Controller creation and destruction. GenetControllerCreate runs the setup steps in
+ * order and records how far it got in GenetController_t.State. GenetControllerDestroy
  * walks back from that state, and can be called again after a failure.
  *
  * Logging: each failure is logged once, where it is detected, with the device
@@ -280,7 +280,7 @@ __RegisterInterrupt(
 }
 
 oserr_t
-GenetCreate(
+GenetControllerCreate(
     _InOut_ GenetController_t* controller,
     _In_    Device_t*          device)
 {
@@ -415,7 +415,7 @@ __ReleaseResources(
 }
 
 oserr_t
-GenetDestroy(
+GenetControllerDestroy(
     _InOut_ GenetController_t* controller)
 {
     oserr_t status;

@@ -53,7 +53,7 @@
  * Controller lifetime, protected by the adapter lock. Creation advances from
  * GENET_STATE_NEW through GENET_STATE_PREPARED and GENET_STATE_MAPPED to
  * GENET_STATE_READY. Failed creation leaves the last completed stage for
- * GenetDestroy. Registers stay mapped from GENET_STATE_MAPPED through
+ * GenetControllerDestroy. Registers stay mapped from GENET_STATE_MAPPED through
  * GENET_STATE_UNMAPPING, including a failed unmap. GENET_STATE_DESTROYED is
  * terminal.
  */
@@ -123,7 +123,7 @@ GenetRegistersMapped(
 /**
  * @brief Set up a Pi 4 controller and publish its network adapter. The state
  * must start out zeroed. If this fails, the partial state is kept so
- * GenetDestroy can clean it up, and the step that failed is logged.
+ * GenetControllerDestroy can clean it up, and the step that failed is logged.
  * @param controller GENET state protected by the adapter lock.
  * @param device Platform device description. It must stay valid until the
  *               controller is destroyed.
@@ -132,7 +132,7 @@ GenetRegistersMapped(
  *         status of the setup step that failed.
  */
 __EXTERN oserr_t
-GenetCreate(
+GenetControllerCreate(
     _InOut_ GenetController_t* controller,
     _In_    Device_t*          device);
 
@@ -144,7 +144,7 @@ GenetCreate(
  *         otherwise the error of the step that has to be tried again.
  */
 __EXTERN oserr_t
-GenetDestroy(
+GenetControllerDestroy(
     _InOut_ GenetController_t* controller);
 
 #endif //!__GENET_H__
