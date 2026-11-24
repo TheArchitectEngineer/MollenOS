@@ -1,0 +1,7 @@
+driver:
+  compatibles:
+    - brcm,bcm2711-genet-v5
+  
+  capabilities:
+    - deviceio-access
+    - interrupt-control

@@ -5,3 +5,4 @@ if (NOT DEFINED VALI_BUILD)
 endif ()
 
 add_subdirectory(common)
+add_subdirectory(genet)
