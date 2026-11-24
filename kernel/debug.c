@@ -195,6 +195,9 @@ DebugPanic(
     va_list   arguments;
     uuid_t    coreID;
 
+    // Switch the log first, so none of the messages below can wait on a log
+    // lock held by a stopped core, or by this core if it faulted inside the log.
+    LogEnterPanicMode();
     ERROR("DebugPanic(Scope %" PRIiIN ")", FatalityScope);
 
     // Disable all other cores in system if the fault is kernel scope
@@ -213,10 +216,9 @@ DebugPanic(
 
     // Format the debug information
     va_start(arguments, Message);
-    vsprintf(&messageBuffer[0], Message, arguments);
+    vsnprintf(&messageBuffer[0], sizeof(messageBuffer), Message, arguments);
     va_end(arguments);
-    LogSetRenderMode(1);
-    LogAppendMessage(OSSYSLOGLEVEL_ERROR, &messageBuffer[0]);
+    LogAppendMessage(OSSYSLOGLEVEL_ERROR, "%s", &messageBuffer[0]);
     
     // Log cpu and threads
     currentThread = ThreadCurrentForCore(coreID);

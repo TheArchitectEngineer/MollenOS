@@ -16,7 +16,7 @@
  *
  */
 
-#include <ddk/types/interrupt-controller.h>
+#include <os/types/interrupt_controller.h>
 #include <ddk/types/interrupt-source.h>
 #include <ddk/interrupts/bus.h>
 #include <ddk/utils.h>

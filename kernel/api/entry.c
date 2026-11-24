@@ -68,8 +68,8 @@ struct SHMRegionSession;
 // - Protected, services/modules
 
 // System specific system calls
-extern oserr_t ScSystemDebug(enum OSSysLogLevel level, const char* message);
-extern oserr_t ScMigrateKernelLog(void*, size_t, size_t*);
+extern oserr_t ScSystemDebug(enum OSSysLogLevel level, const char* message, size_t length);
+extern oserr_t ScLogRead(const uint64_t* sequence, void* buffer, size_t bufferSize, OSKernelLogReadResult_t* result);
 extern oserr_t ScMapBootFramebuffer(void** bufferOut);
 extern oserr_t ScMapRamdisk(void** bufferOut, size_t* lengthOut);
 extern oserr_t ScCapabilityGrant(Capabilities_t capabilities, uuid_t memorySpaceHandle);
@@ -219,7 +219,7 @@ static struct SystemCallDescriptor {
 } g_systemCallsTable[SYSTEM_CALL_COUNT] = {
 // BEGIN GENERATED SYSCALL TABLE - tools/generate_syscalls.py
     DefineSyscall(0, ScSystemDebug),
-    DefineSyscall(1, ScMigrateKernelLog),
+    DefineSyscall(1, ScLogRead),
     DefineSyscall(2, ScMapBootFramebuffer),
     DefineSyscall(3, ScMapRamdisk),
     DefineSyscall(4, ScCapabilityGrant),

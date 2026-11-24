@@ -24,15 +24,19 @@
 _CODE_BEGIN
 
 /**
- * @brief Logs a message to the system log
+ * @brief Formats a message and writes it to the system log. The message goes
+ * to the kernel log, exactly like OSSysLogWrite, and the syslog service shows
+ * it on the screen from there.
+ *
  * @param level Severity level of the message.
- * @param fmt printf-style format string followed by its arguments.
- * @return None.
+ * @param fmt   printf-style format string followed by its arguments. The
+ *              formatted message is cut off after OSKERNELLOG_MESSAGE_MAX
+ *              characters.
  */
 CRTDECL(void,
 OSSystemLog(
-        _In_ enum OSSysLogLevel level,
-        _In_ const char*        fmt, ...));
+    _In_ enum OSSysLogLevel level,
+    _In_ const char*        fmt, ...));
 
 _CODE_END
 #endif //!__OS_SERVICE_SYSLOG_H__

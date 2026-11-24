@@ -22,7 +22,7 @@
 #define __PCI_MSI_H__
 
 #include <ddk/types/interrupt-pci.h>
-#include <ddk/types/interrupt.h>
+#include <os/types/interrupt.h>
 
 // Callbacks for reading and writing PCI configuration space.
 struct PciConfigOperations {

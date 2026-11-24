@@ -11,8 +11,8 @@
 # Verify:     python3 tools/generate_syscalls.py --check
 
 # Operating System (Module) Interface
-0      Debug                                ScSystemDebug                          oserr_t   _level, _msg
-1      MigrateLogs                          ScMigrateKernelLog                     oserr_t   _buffer, _size, _readOut
+0      Debug                                ScSystemDebug                          oserr_t   _level, _msg, _length
+1      LogRead                              ScLogRead                              oserr_t   _sequence, _buffer, _size, _result
 2      MapBootFramebuffer                   ScMapBootFramebuffer                   oserr_t   BufferOut
 3      MapRamdisk                           ScMapRamdisk                           oserr_t   BufferOut, LengthOut
 4      CapabilityGrant                      ScCapabilityGrant                      oserr_t   _capability, _handle

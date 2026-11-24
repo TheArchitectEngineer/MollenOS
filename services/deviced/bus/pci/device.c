@@ -21,7 +21,7 @@
 //#define __TRACE
 
 #include <limits.h>
-#include <ddk/types/interrupt.h>
+#include <os/types/interrupt.h>
 #include <ddk/interrupts/interrupt.h>
 #include <ddk/interrupts/bus.h>
 #include <ddk/devices/bus.h>
@@ -267,7 +267,7 @@ __PciBusControl(
         return OS_EOK;
     }
 
-    if (request == OSIOCTLREQUEST_DEVICE_ACTIVATE) {
+    if (request == OSIOCTLREQUEST_DEVICE_SET_STAGE) {
         if (buffer == NULL || length != sizeof(stage)) {
             WARNING("__PciBusControl: invalid activation buffer for %u:%u:%u.%u, length %llu",
                 device->Host->Identification.Segment, device->Bus, device->Slot,

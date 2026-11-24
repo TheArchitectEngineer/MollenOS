@@ -26,25 +26,31 @@
 typedef enum Capabilities {
     // Grant the capability to grant other processes capabilities.
     // This is a super privilege.
-    CAPABILITY_GRANT_CAPABILITY       = 0x00000001U,
+    CAPABILITY_GRANT_CAPABILITY          = 0x00000001U,
     // Grant the capability to query and access firmware resources.
     // This is either ACPI or DeviceTree resources.
-    CAPABILITY_FIRMWARE_ACCESS        = 0x00000002U,
+    CAPABILITY_FIRMWARE_ACCESS           = 0x00000002U,
     // Grant the capability to access the kernel initramfs.
-    CAPABILITY_RAMDISK_ACCESS         = 0x00000004U,
+    CAPABILITY_RAMDISK_ACCESS            = 0x00000004U,
     // Grant the capability to access device I/O spaces.
-    CAPABILITY_DEVICEIO_ACCESS        = 0x00000008U,
+    CAPABILITY_DEVICEIO_ACCESS           = 0x00000008U,
     // Grant the capability to register new device I/O spaces.
-    CAPABILITY_DEVICEIO_MANAGEMENT    = (0x00000010U | CAPABILITY_DEVICEIO_ACCESS),
+    CAPABILITY_DEVICEIO_MANAGEMENT       = (0x00000010U | CAPABILITY_DEVICEIO_ACCESS),
     // Grant the capability to allocate and manage interrupts.
-    CAPABILITY_INTERRUPT_CONTROL      = 0x00000020U,
+    CAPABILITY_INTERRUPT_CONTROL         = 0x00000020U,
     // Grant the capability to create memory spaces.
-    CAPABILITY_MEMORYSPACE_MANAGEMENT = 0x00000040U
+    CAPABILITY_MEMORYSPACE_MANAGEMENT    = 0x00000040U,
+    // Grant the capability to read all messages in the kernel log.
+    CAPABILITY_SYSLOG_READ               = 0x00000080U,
+    // Grant the capability to map the boot framebuffer and draw on it. The
+    // kernel stops printing its log to the screen once it is mapped.
+    CAPABILITY_BOOT_VIDEO                = 0x00000100U
 } Capabilities_t;
 
 // All defined capability bits. Unknown bits must not become latent privileges.
 #define CAPABILITY_ALL (CAPABILITY_GRANT_CAPABILITY | CAPABILITY_FIRMWARE_ACCESS | \
     CAPABILITY_RAMDISK_ACCESS | CAPABILITY_DEVICEIO_MANAGEMENT | \
-    CAPABILITY_INTERRUPT_CONTROL | CAPABILITY_MEMORYSPACE_MANAGEMENT)
+    CAPABILITY_INTERRUPT_CONTROL | CAPABILITY_MEMORYSPACE_MANAGEMENT | \
+    CAPABILITY_SYSLOG_READ | CAPABILITY_BOOT_VIDEO)
 
 #endif //!__OS_TYPES_CAPABILITIES_H__

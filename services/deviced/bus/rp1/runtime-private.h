@@ -19,7 +19,7 @@
 #ifndef __DEVICED_RP1_RUNTIME_PRIVATE_H__
 #define __DEVICED_RP1_RUNTIME_PRIVATE_H__
 
-#include <ddk/types/interrupt.h>
+#include <os/types/interrupt.h>
 #include <ddk/interrupts/bus.h>
 
 #include <bus/rp1/runtime.h>

@@ -52,13 +52,13 @@ Rp1ChildResourceControl(
     // GEM needs clock setup and reset validation. Handle its requests before
     // the generic child path, which only records preparation state.
     if (request == OSIOCTLREQUEST_ETHERNET_PHY_RESET ||
-        request == OSIOCTLREQUEST_DEVICE_ACTIVATE) {
+        request == OSIOCTLREQUEST_DEVICE_SET_STAGE) {
         if (Rp1EthernetIsDevice(child)) {
             return Rp1EthernetControl(child, principal, request, buffer, length);
         }
     }
 
-    if (request == OSIOCTLREQUEST_DEVICE_ACTIVATE) {
+    if (request == OSIOCTLREQUEST_DEVICE_SET_STAGE) {
         enum DeviceStage stage;
         
         // For children other than GEM, only record preparation state here for

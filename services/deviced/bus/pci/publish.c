@@ -31,7 +31,7 @@
 #include <firmware/pci.h>
 #include <ddk/devices/bus.h>
 #include <ddk/interrupts/bus.h>
-#include <ddk/types/interrupt-controller.h>
+#include <os/types/interrupt_controller.h>
 #include <ddk/utils.h>
 #include <stdlib.h>
 #include <string.h>

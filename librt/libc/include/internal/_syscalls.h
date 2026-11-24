@@ -37,8 +37,8 @@ CRTDECL(SCTYPE, syscall5(SCTYPE Function, SCTYPE Arg0, SCTYPE Arg1, SCTYPE Arg2,
 _CODE_END
 
 // BEGIN GENERATED SYSCALL WRAPPERS - tools/generate_syscalls.py
-#define Syscall_Debug(_level, _msg) (oserr_t)syscall2(0, SCPARAM(_level), SCPARAM(_msg))
-#define Syscall_MigrateLogs(_buffer, _size, _readOut) (oserr_t)syscall3(1, SCPARAM(_buffer), SCPARAM(_size), SCPARAM(_readOut))
+#define Syscall_Debug(_level, _msg, _length) (oserr_t)syscall3(0, SCPARAM(_level), SCPARAM(_msg), SCPARAM(_length))
+#define Syscall_LogRead(_sequence, _buffer, _size, _result) (oserr_t)syscall4(1, SCPARAM(_sequence), SCPARAM(_buffer), SCPARAM(_size), SCPARAM(_result))
 #define Syscall_MapBootFramebuffer(BufferOut) (oserr_t)syscall1(2, SCPARAM(BufferOut))
 #define Syscall_MapRamdisk(BufferOut, LengthOut) (oserr_t)syscall2(3, SCPARAM(BufferOut), SCPARAM(LengthOut))
 #define Syscall_CapabilityGrant(_capability, _handle) (oserr_t)syscall2(4, SCPARAM(_capability), SCPARAM(_handle))

@@ -315,7 +315,7 @@ DmHandleIoctl(
         }
         enableDma = (((struct OSIOCtlBusControl*)buffer)->Flags &
                      DEVICEMANAGER_IOCTL_BUSMASTER_ENABLE) != 0;
-    } else if (request == OSIOCTLREQUEST_DEVICE_ACTIVATE) {
+    } else if (request == OSIOCTLREQUEST_DEVICE_SET_STAGE) {
         if (buffer == NULL || length != sizeof(enum DeviceStage)) {
             status = OS_EINVALPARAMS;
             goto done;

@@ -260,7 +260,7 @@ __Rp1BusControl(
 
     // Resource, start/stop and Ethernet requests require the bus lock here.
     // Interrupt requests take the same lock in their separate paths below.
-    if (request == OSIOCTLREQUEST_DEVICE_RESOURCES || request == OSIOCTLREQUEST_DEVICE_ACTIVATE ||
+    if (request == OSIOCTLREQUEST_DEVICE_RESOURCES || request == OSIOCTLREQUEST_DEVICE_SET_STAGE ||
         request == OSIOCTLREQUEST_ETHERNET_CONFIG || request == OSIOCTLREQUEST_ETHERNET_PHY_RESET) {
         // Resource setup, PHY reset and stop share saved register state. Keep
         // them serialized with DMA and interrupt requests on the same bus.

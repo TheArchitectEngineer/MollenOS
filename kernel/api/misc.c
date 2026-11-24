@@ -22,31 +22,124 @@
 
 #include <arch/output.h>
 #include <arch/utils.h>
+#include <capabilities.h>
+#include <heap.h>
+#include <log.h>
 #include <memoryspace.h>
 #include <threading.h>
 #include <console.h>
 #include <machine.h>
 #include <debug.h>
 
+// Largest buffer one LogRead call fills. A larger user buffer is only filled
+// up to this size, which keeps the kernel copy of the records small.
+#define __LOG_READ_MAX (16 * 1024)
+
 oserr_t
 ScSystemDebug(
     _In_ enum OSSysLogLevel level,
-    _In_ const char*        message)
+    _In_ const char*        message,
+    _In_ size_t             length)
 {
+    char    text[OSKERNELLOG_MESSAGE_MAX + 1];
+    oserr_t status;
+
+    if (message == NULL || (unsigned int)level > OSSYSLOGLEVEL_ERROR) {
+        return OS_EINVALPARAMS;
+    }
+    if (length == 0) {
+        return OS_EOK;
+    }
+
+    // Copy the text into the kernel first, so a bad user pointer fails the call
+    // instead of faulting inside the log. Longer messages are cut off.
+    if (length > OSKERNELLOG_MESSAGE_MAX) {
+        length = OSKERNELLOG_MESSAGE_MAX;
+    }
+
+    status = MemorySpaceCopyFromUser(&text[0], message, length);
+    if (status != OS_EOK) {
+        return status;
+    }
+    text[length] = '\0';
+
     // The caller has already formatted the message. Pass it as an argument so
     // that a '%' left in the text is printed as is, and is not read as a
     // conversion that would take arguments the caller never passed.
-    LogAppendMessage(level, "%s", message);
+    LogAppendMessage(level, "%s", &text[0]);
     return OS_EOK;
 }
 
 oserr_t
-ScMigrateKernelLog(
-    _In_ void*   buffer,
-    _In_ size_t  bufferSize,
-    _In_ size_t* bytesRead)
+ScLogRead(
+    _In_  const uint64_t*          sequence,
+    _In_  void*                    buffer,
+    _In_  size_t                   bufferSize,
+    _Out_ OSKernelLogReadResult_t* result)
 {
-    return LogMigrate(buffer, bufferSize, bytesRead);
+    OSKernelLogReadResult_t readResult;
+    uint64_t                startSequence;
+    void*                   records;
+    oserr_t                 status;
+    oserr_t                 copyStatus;
+
+    if (sequence == NULL || buffer == NULL || bufferSize == 0 || result == NULL) {
+        return OS_EINVALPARAMS;
+    }
+
+    status = CapabilityVerify(CAPABILITY_SYSLOG_READ);
+    if (status != OS_EOK) {
+        return status;
+    }
+
+    // The sequence number is passed by pointer, because a 64 bit value does
+    // not fit in one system call argument on 32 bit platforms.
+    status = MemorySpaceCopyFromUser(&startSequence, sequence, sizeof(uint64_t));
+    if (status != OS_EOK) {
+        return status;
+    }
+
+    // LogRead holds the log lock with interrupts disabled, so it cannot write
+    // to user memory, which may fault. Read into a kernel buffer and copy that.
+    if (bufferSize > __LOG_READ_MAX) {
+        bufferSize = __LOG_READ_MAX;
+    }
+
+    records = kmalloc(bufferSize);
+    if (records == NULL) {
+        return OS_EOOM;
+    }
+
+    // OS_EBUFFER still fills in readResult, so the caller learns how many
+    // messages were dropped and that its buffer is too small.
+    status = LogRead(startSequence, records, bufferSize, &readResult);
+    if (status != OS_EOK && status != OS_EBUFFER) {
+        kfree(records);
+        return status;
+    }
+
+    if (readResult.BytesRead != 0) {
+        copyStatus = MemorySpaceCopyToUser(
+            buffer,
+            records,
+            readResult.BytesRead
+        );
+        if (copyStatus != OS_EOK) {
+            kfree(records);
+            return copyStatus;
+        }
+    }
+    kfree(records);
+
+    copyStatus = MemorySpaceCopyToUser(
+        result,
+        &readResult,
+        sizeof(OSKernelLogReadResult_t)
+    );
+    if (copyStatus != OS_EOK) {
+        return copyStatus;
+    }
+    return status;
 }
 
 oserr_t
@@ -63,10 +156,12 @@ ScSystemQuery(
             if (bufferSize < sizeof(OSBootVideoDescriptor_t)) {
                 return OS_EINVALPARAMS;
             }
+
             oserr = VideoQuery(info);
             if (oserr != OS_EOK) {
                 return oserr;
             }
+            
             *bytesQueriedOut = sizeof(OSBootVideoDescriptor_t);
             return OS_EOK;
         } break;
@@ -135,6 +230,11 @@ ScInstallSignalHandler(
     return MemorySpaceSetSignalHandler(GetCurrentMemorySpace(), handler);
 }
 
+/**
+ * @brief Maps the boot framebuffer into the calling process. The caller needs
+ * the boot-video capability. On success the kernel stops printing its log to
+ * the screen, because the caller now draws on it.
+ */
 oserr_t
 ScMapBootFramebuffer(
     _Out_ void** bufferOut)
@@ -144,6 +244,15 @@ ScMapBootFramebuffer(
     uintptr_t      fbVirtual       = 0;
     size_t         fbSize          = VideoGetTerminal()->Info.BytesPerScanline * VideoGetTerminal()->Info.Height;
     oserr_t        oserr;
+
+    if (bufferOut == NULL) {
+        return OS_EINVALPARAMS;
+    }
+
+    oserr = CapabilityVerify(CAPABILITY_BOOT_VIDEO);
+    if (oserr != OS_EOK) {
+        return oserr;
+    }
 
     if (!VideoGetTerminal()->FrameBufferAddressPhysical) {
         return OS_ENOTSUPPORTED;
@@ -159,8 +268,12 @@ ScMapBootFramebuffer(
         },
         &fbVirtual
     );
-    if (oserr == OS_EOK) {
-        *bufferOut = (void*)fbVirtual;
+    if (oserr != OS_EOK) {
+        ERROR("ScMapBootFramebuffer failed to map the framebuffer: %u", oserr);
+        return oserr;
     }
-    return oserr;
+
+    LogReleaseScreen();
+    *bufferOut = (void*)fbVirtual;
+    return OS_EOK;
 }

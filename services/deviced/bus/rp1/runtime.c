@@ -18,7 +18,7 @@
 
 //#define __TRACE
 
-#include <ddk/types/interrupt-group.h>
+#include <os/types/interrupt_group.h>
 #include <bus/rp1/dma.h>
 #include <bus/pci/device.h>
 #include <bus/pci/host-private.h>
