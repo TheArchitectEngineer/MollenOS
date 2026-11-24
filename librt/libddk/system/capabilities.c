@@ -42,6 +42,8 @@ static struct {
     { "deviceio-management",     CAPABILITY_DEVICEIO_MANAGEMENT },
     { "interrupt-control",       CAPABILITY_INTERRUPT_CONTROL },
     { "memoryspace-management",  CAPABILITY_MEMORYSPACE_MANAGEMENT },
+    { "syslog-read",             CAPABILITY_SYSLOG_READ },
+    { "boot-video",              CAPABILITY_BOOT_VIDEO },
 };
 
 Capabilities_t

@@ -42,7 +42,10 @@ HardFault(
 {
     uintptr_t    physicalBase = 0;
     unsigned int attributes   = 0;
-    LogSetRenderMode(1);
+
+    // This always ends in DebugPanic. Switch the log now, so the fault details
+    // below are printed even if the fault happened while the log lock was held.
+    LogEnterPanicMode();
 
     ERROR(
             "%s ocurred, error-code: %" PRIuIN ", at address: 0x%" PRIxIN "",

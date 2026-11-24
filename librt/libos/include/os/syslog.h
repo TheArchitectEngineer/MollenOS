@@ -15,7 +15,7 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  *
  * Logging to the system log. OSSysLogWrite formats one message and hands it to
- * the kernel log. The macros below are what code normally uses. TRACE, ENTRY
+ * the kernel log. OSKernelLogRead reads the messages back. The macros below are what code normally uses. TRACE, ENTRY
  * and EXIT only produce output in a source file that defines __TRACE before
  * it includes this header.
  */
@@ -66,12 +66,40 @@ _CODE_BEGIN
  *
  * @param level  Log level of the message, one of the OSSYSLOGLEVEL_* values.
  * @param format printf-style format, followed by its arguments. The formatted
- *               message is cut off after 254 characters.
+ *               message is cut off after OSKERNELLOG_MESSAGE_MAX
+ *               characters.
  */
 CRTDECL(void,
 OSSysLogWrite(
     _In_ enum OSSysLogLevel level,
     _In_ const char*        format, ...));
+
+/**
+ * @brief Copies whole messages from the kernel log into buffer, oldest first,
+ * starting at the message with the given sequence number. Each message is an
+ * OSKernelLogRecord_t header followed by its text. Step to the next message by
+ * adding the header's Size. The caller needs the syslog-read capability.
+ *
+ * @param sequence   Sequence number of the first message to copy. Use 0 for
+ *                   the oldest message in the log, or result->NextSequence
+ *                   from the previous call to continue.
+ * @param buffer     Buffer that receives the messages.
+ * @param bufferSize Size of buffer in bytes. At most 16 KiB is filled per call.
+ *                   OSKERNELLOG_RECORD_MAX bytes always fit one message.
+ * @param result     Receives the next sequence number, the number of messages
+ *                   that were dropped from the log before they could be read,
+ *                   and the number of bytes written to buffer.
+ * @return OS_EOK when messages were copied or no new ones exist,
+ *         OS_EBUFFER if the next message does not fit in buffer,
+ *         OS_EPERMISSIONS without the syslog-read capability, or OS_EINVALPARAMS
+ *         for bad arguments or a sequence number newer than any message.
+ */
+CRTDECL(oserr_t,
+OSKernelLogRead(
+    _In_  uint64_t                 sequence,
+    _In_  void*                    buffer,
+    _In_  size_t                   bufferSize,
+    _Out_ OSKernelLogReadResult_t* result));
 
 _CODE_END
 

@@ -1,24 +1,18 @@
 /**
  * Syslog Service
- * The system log service gathers system log messages, and provides a startup
- * interface for reporting boot progress.
+ * The system log service reads the kernel log and draws it on the boot
+ * framebuffer. Messages are written to the kernel log (OSSysLogWrite), not
+ * sent to this service. The service also provides a startup interface for
+ * reporting boot progress.
  */
  
 import "types"
 
 namespace sys
 
-enum log_level {
-    TRACE,
-    DEBUG,
-    WARNING,
-    ERROR
-}
-
 service log : message {
     func report_stage(string stage, int steps) : () = 1;
     func report_progress(string progress) : () = 2;
-    func log(log_level level, string msg) : () = 3;
     func inhibit() : () = 4;
     func uninhibit() : () = 5;
 }

@@ -45,6 +45,11 @@ struct __HandleLookup {
 
 #define OSHANDLE_FLAG_OWNERSHIP 0x0001
 
+// Written straight to the kernel log by OSHandleDestroy, which has no way to
+// return the release error to its caller.
+#define __HANDLE_DESTROY_WARNING \
+    "OSHandleDestroy: release failed; owner retained, retry with OSHandleRelease"
+
 static uint64_t __HandleHash(const void* element);
 static int      __HandleCompare(const void* element1, const void* element2);
 
@@ -251,8 +256,8 @@ OSHandleDestroy(
     // Callers with retryable lifetimes must consume OSHandleRelease's status.
     status = OSHandleRelease(handle);
     if (status != OS_EOK) {
-        (void)Syscall_Debug(OSSYSLOGLEVEL_WARNING,
-            "OSHandleDestroy: release failed; owner retained, retry with OSHandleRelease");
+        (void)Syscall_Debug(OSSYSLOGLEVEL_WARNING, __HANDLE_DESTROY_WARNING,
+            sizeof(__HANDLE_DESTROY_WARNING) - 1);
     }
 }
 

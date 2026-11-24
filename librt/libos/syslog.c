@@ -15,7 +15,8 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  *
  * Logging to the system log. The NOTICE, WARNING, ERROR and TRACE macros in
- * os/syslog.h end up here.
+ * os/syslog.h end up here. Messages go to the kernel log, which keeps them in
+ * a ring buffer and prints them to the serial port.
  */
 
 #include <internal/_syscalls.h>
@@ -29,13 +30,32 @@ OSSysLogWrite(
     _In_ const char*        format, ...)
 {
     va_list args;
-    char    buffer[256];
+    char    buffer[OSKERNELLOG_MESSAGE_MAX + 1];
+    int     written;
 
     // A message longer than the buffer is cut off. vsnprintf always ends it
-    // with a zero byte.
+    // with a zero byte, and returns the length the full message would have had.
     va_start(args, format);
-    vsnprintf(&buffer[0], sizeof(buffer) - 1, format, args);
+    written = vsnprintf(&buffer[0], sizeof(buffer), format, args);
     va_end(args);
+    
+    if (written <= 0) {
+        return;
+    } else if (written > OSKERNELLOG_MESSAGE_MAX) {
+        written = OSKERNELLOG_MESSAGE_MAX;
+    }
 
-    Syscall_Debug(level, &buffer[0]);
+    // There is nowhere else to report a failed log write, so the status is
+    // dropped on purpose.
+    (void)Syscall_Debug(level, &buffer[0], (size_t)written);
+}
+
+oserr_t
+OSKernelLogRead(
+    _In_  uint64_t                 sequence,
+    _In_  void*                    buffer,
+    _In_  size_t                   bufferSize,
+    _Out_ OSKernelLogReadResult_t* result)
+{
+    return Syscall_LogRead(&sequence, buffer, bufferSize, result);
 }

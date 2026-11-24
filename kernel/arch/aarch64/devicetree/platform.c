@@ -17,7 +17,7 @@
  */
 
 #include <arch/utils.h>
-#include <ddk/types/interrupt.h>
+#include <os/types/interrupt.h>
 #include <arch/output.h>
 #include <component/cpu.h>
 #include <component/ic.h>
