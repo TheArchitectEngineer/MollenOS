@@ -18,81 +18,12 @@
  * - Stores the characters shown on the screen and moves the cursor.
  */
 
+#include <ds/mstring.h>
 #include <stdlib.h>
 #include "text.h"
 
 // Tab stops are placed every this many columns.
 #define __TEXT_TAB_WIDTH 8
-
-// Code point shown for bytes that are not valid UTF-8.
-#define __TEXT_REPLACEMENT_CHARACTER 0xFFFD
-
-/**
- * @brief Decodes the UTF-8 character at text[*index] and moves *index past it.
- *
- * Any process can write to the kernel log, so the text is not trusted. A
- * malformed sequence (a stray continuation byte, a lead byte without enough
- * continuation bytes, an overlong form, or a value above U+10FFFF) becomes
- * U+FFFD, and only its first byte is skipped. The decoder never reads past
- * the zero byte at the end of text.
- *
- * Lead byte forms:
- * - 0xxxxxxx: one byte, U+0000 to U+007F.
- * - 110xxxxx: two bytes, from U+0080.
- * - 1110xxxx: three bytes, from U+0800.
- * - 11110xxx: four bytes, from U+10000.
- * Each continuation byte has the form 10xxxxxx and adds 6 bits.
- */
-static uint32_t
-__DecodeNext(
-    _In_    const char* text,
-    _InOut_ int*        index)
-{
-    const unsigned char* bytes   = (const unsigned char*)text + *index;
-    uint32_t             lead    = bytes[0];
-    uint32_t             character;
-    uint32_t             minimum;
-    int                  length;
-
-    if (lead < 0x80) {
-        (*index)++;
-        return lead;
-    }
-
-    if ((lead & 0xE0) == 0xC0) {
-        character = lead & 0x1F;
-        minimum   = 0x80;
-        length    = 2;
-    } else if ((lead & 0xF0) == 0xE0) {
-        character = lead & 0x0F;
-        minimum   = 0x800;
-        length    = 3;
-    } else if ((lead & 0xF8) == 0xF0) {
-        character = lead & 0x07;
-        minimum   = 0x10000;
-        length    = 4;
-    } else {
-        (*index)++;
-        return __TEXT_REPLACEMENT_CHARACTER;
-    }
-
-    // The zero byte at the end is not a continuation byte, so this stops at
-    // the end of the text.
-    for (int i = 1; i < length; i++) {
-        if ((bytes[i] & 0xC0) != 0x80) {
-            (*index)++;
-            return __TEXT_REPLACEMENT_CHARACTER;
-        }
-        character = (character << 6) | (bytes[i] & 0x3F);
-    }
-
-    if (character < minimum || character > 0x10FFFF) {
-        (*index)++;
-        return __TEXT_REPLACEMENT_CHARACTER;
-    }
-    *index += length;
-    return character;
-}
 
 static TextCell_t*
 __StoredRow(
@@ -216,10 +147,18 @@ TextGridWrite(
     _In_ uint32_t    color,
     _In_ const char* text)
 {
-    int index = 0;
+    int     index = 0;
+    mchar_t character;
 
-    while (text[index] != '\0') {
-        uint32_t character = __DecodeNext(text, &index);
+    // Any process can write to the kernel log, so the text is not trusted.
+    // mstr_next reads at most 4 bytes per character, never reads past the
+    // zero byte, and returns U+FFFD for bytes that are not valid UTF-8.
+    for (;;) {
+        character = mstr_next(text, &index);
+        if (character == MSTRING_EOS) {
+            break;
+        }
+
         switch (character) {
             case '\n': {
                 __NewLine(grid);
