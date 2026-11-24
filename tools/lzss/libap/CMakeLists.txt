@@ -1,6 +1,6 @@
 # Reuse Vali's bounded portable AP32 decoder. The upstream apultra decoder is
 # not used: unlike this implementation it can read past a truncated payload.
-add_library(aplib_decoder OBJECT "${CMAKE_CURRENT_SOURCE_DIR}/../../../librt/libddk/initrd/depacks.c")
+add_library(aplib_decoder OBJECT "${CMAKE_CURRENT_SOURCE_DIR}/../../../librt/libddk/third_party/aplib/depacks.c")
 target_compile_definitions(aplib_decoder PRIVATE
     aP_depack_safe=aplib_depack_ap32 aP_get_orig_size=aplib_header_orig_size)
 
