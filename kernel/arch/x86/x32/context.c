@@ -406,19 +406,16 @@ ArchThreadContextFork(
 
     // Commit enough space for the extra Context_t we add below
     oserr = __AllocateStack(
-            contextType,
-            contextSize,
-            committedSize,
-            &contextAddress
+        contextType,
+        contextSize,
+        committedSize,
+        &contextAddress
     );
     if (oserr != OS_EOK) {
         return oserr;
     }
 
-    // contextAddress now points to the bottom of the stack, but we need it
-    // to point to the top, so we can calculate a new 'current'. So let's fix
-    // it up and then calculate new addresses
-    contextAddress += contextSize;    // point to top
+    // contextAddress now points to the top of the stack
     newStackTop    = contextAddress;  // save it for fix ups
     contextAddress -= stackUsage;     // point to bottom
 
