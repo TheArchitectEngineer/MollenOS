@@ -13,41 +13,32 @@
  *
  * You should have received a copy of the GNU General Public License
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
+ * 
+ * The system log. Messages go to the kernel log, the same as with
+ * OSSysLogWrite. The syslog service reads them from the kernel log and draws
+ * them on the screen, so it never needs to receive them directly.
  */
 
-#include <os/services/lookup.h>
-#include <gracht/link/vali.h>
-#include <internal/_syscalls.h>
-#include <internal/_utils.h>
 #include <os/services/syslog.h>
+#include <os/syslog.h>
+#include <stdarg.h>
 #include <stdio.h>
-
-#include <sys_log_service_client.h>
 
 void
 OSSystemLog(
         _In_ enum OSSysLogLevel level,
         _In_ const char*        fmt, ...)
 {
-    struct vali_link_message msg = VALI_MSG_INIT_HANDLE(OSServiceGetSysLog());
-    va_list                  args;
-    char                     buffer[256];
+    va_list args;
+    char    buffer[OSKERNELLOG_MESSAGE_MAX + 1];
+    int     written;
 
+    // vsnprintf cuts a long message off and always ends it with a zero byte.
     va_start(args, fmt);
-    vsnprintf(&buffer[0], sizeof(buffer) - 1, fmt, args);
+    written = vsnprintf(&buffer[0], sizeof(buffer), fmt, args);
     va_end(args);
-
-    // During early startup phase, the syslog service has not yet
-    // started up and migrated logs, and we resort to the kernel log
-    // which only outputs on serial.
-    if (msg.address.Data.GlobalHandleID == UUID_INVALID) {
-        (void)Syscall_Debug(level, &buffer[0]);
+    if (written <= 0) {
         return;
     }
-    sys_log_log(
-            GetGrachtClient(),
-            &msg.base,
-            (const enum sys_log_level)level,
-            &buffer[0]
-    );
+    OSSysLogWrite(level, "%s", &buffer[0]);
 }

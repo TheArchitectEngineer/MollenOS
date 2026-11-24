@@ -103,6 +103,31 @@ SpinlockAcquireIrq(
     spinlock->IrqState = irqState;
 }
 
+oserr_t
+SpinlockTryAcquireIrq(
+        _In_ Spinlock_t* spinlock)
+{
+    irqstate_t   irqState;
+    unsigned int current;
+    unsigned int expected;
+    assert(spinlock != NULL);
+
+    irqState = InterruptDisable();
+
+    // The lock is free when the next ticket to hand out is the ticket being
+    // served. Take that ticket only if no one took it in the meantime. If
+    // another caller got there first, Next has moved on and the exchange fails.
+    current  = atomic_load(&spinlock->Current);
+    expected = current;
+    if (!atomic_compare_exchange_strong(&spinlock->Next, &expected, current + 1)) {
+        InterruptRestoreState(irqState);
+        return OS_EBUSY;
+    }
+
+    spinlock->IrqState = irqState;
+    return OS_EOK;
+}
+
 void
 SpinlockRelease(
         _In_ Spinlock_t* spinlock)

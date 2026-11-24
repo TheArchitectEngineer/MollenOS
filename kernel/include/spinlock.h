@@ -67,6 +67,23 @@ SpinlockAcquireIrq(
         _In_ Spinlock_t* spinlock);
 
 /**
+ * @brief Takes the lock and disables interrupts, but only if the lock is free
+ * right now. It never waits for another holder.
+ *
+ * Use it where waiting could deadlock, for example while the system is
+ * stopping after a fatal error and the holder may never release the lock.
+ * Release a lock taken this way with SpinlockReleaseIrq.
+ *
+ * @param spinlock The lock to take.
+ * @return OS_EOK if the lock was taken, or OS_EBUSY if it is held or another
+ *         caller is waiting for it. Interrupts are left as they were on
+ *         OS_EBUSY.
+ */
+KERNELAPI oserr_t KERNELABI
+SpinlockTryAcquireIrq(
+        _In_ Spinlock_t* spinlock);
+
+/**
  * @brief
  * @param spinlock
  */

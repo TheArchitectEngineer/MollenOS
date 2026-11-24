@@ -23,15 +23,7 @@
 #include <os/types/shm.h>
 #include <os/types/dma.h>
 #include <os/types/time.h>
-#include <time.h> // for clock_t
-
-typedef struct OSKernelLogEntry {
-    enum OSSysLogLevel Level;
-    uuid_t             CoreID;
-    uuid_t             ThreadID;
-    clock_t            Timestamp;
-    char               Message[128];
-} OSKernelLogEntry_t;
+#include <time.h>
 
 typedef struct HandleSetWaitParameters {
     struct ioset_event* Events;

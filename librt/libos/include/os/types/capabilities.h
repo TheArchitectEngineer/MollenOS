@@ -42,8 +42,7 @@ typedef enum Capabilities {
     CAPABILITY_MEMORYSPACE_MANAGEMENT    = 0x00000040U,
     // Grant the capability to read all messages in the kernel log.
     CAPABILITY_SYSLOG_READ               = 0x00000080U,
-    // Grant the capability to map the boot framebuffer and draw on it. The
-    // kernel stops printing its log to the screen once it is mapped.
+    // Grant the capability to map the boot framebuffer and draw on it.
     CAPABILITY_BOOT_VIDEO                = 0x00000100U
 } Capabilities_t;
 
