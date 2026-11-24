@@ -28,7 +28,7 @@ add_subdirectory(deviced)
 add_subdirectory(filed)
 add_subdirectory(processd)
 add_subdirectory(served)
-#add_subdirectory(syslogd)
+add_subdirectory(syslogd)
 add_subdirectory(usbd)
 add_subdirectory(netd)
 

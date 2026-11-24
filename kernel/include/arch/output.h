@@ -16,9 +16,9 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  *
  *
- * Video Interface (Boot)
- * - Contains the shared kernel video interface
- *   that all sub-layers / architectures must conform to
+ * Boot Output Interface
+ * - The boot video mode and the serial port, which every architecture
+ *   provides. The kernel does not draw on the screen.
  */
 
 #ifndef __VALI_OUTPUT_H__
@@ -27,67 +27,28 @@
 #include <os/osdefs.h>
 #include <os/types/video.h>
 
+/**
+ * @brief The boot video mode and the outputs the kernel log can print to.
+ *
+ * AvailableOutputs holds VIDEO_* flags. The kernel only prints to the serial
+ * port (VIDEO_UART). It never draws on the screen. Info and
+ * FrameBufferAddressPhysical describe the boot video mode, so the syslog
+ * service can map the framebuffer and draw the log there.
+ */
 typedef struct BootTerminal {
-    unsigned int				AvailableOutputs;
-    OSBootVideoDescriptor_t     Info;
-
-    uintptr_t                   FrameBufferAddress;
-    uintptr_t                   FrameBufferAddressPhysical;
-    uintptr_t                   BackBufferAddress;
-
-    unsigned					CursorX;
-    unsigned					CursorY;
-    
-    unsigned					CursorStartX;
-    unsigned					CursorStartY;
-    unsigned					CursorLimitX;
-    unsigned					CursorLimitY;
-
-    uint32_t					FgColor;
-    uint32_t					BgColor;
+    unsigned int            AvailableOutputs;
+    OSBootVideoDescriptor_t Info;
+    uintptr_t               FrameBufferAddressPhysical;
 } BootTerminal_t;
 
-/* Video Type Definitions
- * Currently only two kind of video types needs
- * to be supported for boot - textmode or lfbmode */
-#define VIDEO_UART      0x00000001
-#define VIDEO_TEXT      0x00000002
-#define VIDEO_GRAPHICS  0x00000004 // This and _TEXT are mutually exclusive
-
-/* VideoGetTerminal
- * Retrieves the current terminal information */
-KERNELAPI BootTerminal_t* KERNELABI VideoGetTerminal(void);
-
-/* VideoClear
- * Clears the video framebuffer by initializing it to a default color. */
-KERNELAPI void KERNELABI VideoClear(uint32_t color);
-
-/* VideoDrawPixel
- * Draws a pixel of the given color at the specifiedpixel-position */
-KERNELAPI void KERNELABI
-VideoDrawPixel(
-    _In_ unsigned int X, 
-    _In_ unsigned int Y, 
-    _In_ uint32_t     Color);
-
-/* VideoDrawCharacter
- * Renders a character of the given color(s) at the specified pixel-position */
-KERNELAPI oserr_t KERNELABI
-VideoDrawCharacter(
-    _In_ unsigned int X, 
-    _In_ unsigned int Y, 
-    _In_ int          Character, 
-    _In_ uint32_t     Bg, 
-    _In_ uint32_t     Fg);
+// The serial port is set up and the log can print to it.
+#define VIDEO_UART 0x00000001
 
 /**
- * Displays a character to the default video output if available. Default colors will be used
- * @param character [In] The character to display
- * @return
+ * @brief Returns the boot video mode and the available outputs.
  */
-KERNELAPI void KERNELABI
-VideoPutCharacter(
-    _In_ int character);
+KERNELAPI BootTerminal_t* KERNELABI
+VideoGetTerminal(void);
 
 /**
  * Initializes the serial output for the operating system. This is the output that is

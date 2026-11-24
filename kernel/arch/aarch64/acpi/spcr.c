@@ -126,9 +126,8 @@ Arm64AcpiInitializeConsole(void)
         return;
     }
 
-    // ConsoleInitialize ran before ACPI told us where the UART is. Turn on
-    // rendering now, so the startup messages buffered so far are written out
-    // to this console.
-    LogSetRenderMode(1);
+    // The log stored every message since boot, because ACPI only now told us
+    // where the UART is. Print them now.
+    LogFlush();
     DEBUG("SPCR PL011 console at 0x%llx", (unsigned long long)address);
 }

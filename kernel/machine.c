@@ -35,7 +35,6 @@
 #include <acpiinterface.h>
 #include <devicetree.h>
 
-#include <console.h>
 #include <utils/crc32.h>
 #include <debug.h>
 #include <futex.h>
@@ -134,12 +133,6 @@ InitializeMachine(
     oserr = MachineMemoryInitialize(&g_machine, &g_bootCore);
     if (oserr != OS_EOK) {
         ERROR("Failed to initalize system memory system");
-        ArchProcessorHalt();
-    }
-
-    oserr = ConsoleInitialize();
-    if (oserr != OS_EOK) {
-        ERROR("Failed to initialize output for system.");
         ArchProcessorHalt();
     }
 

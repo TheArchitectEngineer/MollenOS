@@ -230,13 +230,6 @@ void format_float(
 }
 #endif
 
-#ifdef LIBC_KERNEL
-__EXTERN
-oserr_t
-VideoPutCharacter(
-    _In_ int Character);
-#endif
-
 static int
 streamout_char(FILE *stream, int chr)
 {
@@ -259,7 +252,9 @@ streamout_char(FILE *stream, int chr)
     }
 
 #ifdef LIBC_KERNEL
-    return VideoPutCharacter(chr) == OS_EOK;
+    // The kernel only formats into string buffers. It has no file streams and
+    // never draws on the screen, so writing to a stream fails.
+    return 0;
 #else
     return fputtc((TCHAR)chr, stream) != _TEOF;
 #endif

@@ -1010,46 +1010,6 @@ __MapBootResources(
 }
 
 static oserr_t
-__RemapFramebuffer(
-        _In_ MemorySpace_t* memorySpace)
-{
-    vaddr_t    virtualBase;
-    size_t     framebufferSize;
-    oserr_t osStatus;
-    int        pageCount;
-    TRACE("__RemapFramebuffer(framebuffer=0x%" PRIxIN ")",
-          VideoGetTerminal()->FrameBufferAddress);
-
-    // If no framebuffer for output, no need to do this
-    if (!VideoGetTerminal()->FrameBufferAddress) {
-        return OS_EOK;
-    }
-
-    framebufferSize = VideoGetTerminal()->Info.BytesPerScanline * VideoGetTerminal()->Info.Height;
-
-    // Allocate a new virtual mapping
-    virtualBase = StaticMemoryPoolAllocate(&GetMachine()->GlobalAccessMemory, framebufferSize);
-    if (virtualBase == 0) {
-        ERROR("__RemapFramebuffer Ran out of memory for allocation 0x%" PRIxIN " (ga-memory)", framebufferSize);
-        return OS_EOOM;
-    }
-
-    pageCount = DIVUP(framebufferSize, PAGE_SIZE);
-
-    // Create the new mapping in the address space
-    osStatus = __InstallFirmwareMapping(memorySpace,
-                                        virtualBase,
-                                        VideoGetTerminal()->FrameBufferAddress,
-                                        pageCount,
-                                        PAGE_PRESENT | PAGE_WRITE | PAGE_USER | PAGE_PERSISTENT
-    );
-
-    // Update video address to the new
-    VideoGetTerminal()->FrameBufferAddress = virtualBase;
-    return osStatus;
-}
-
-static oserr_t
 __CreateKernelMappings(
         _In_ MemorySpace_t*           memorySpace,
         _In_ PlatformMemoryMapping_t* kernelMappings)
@@ -1146,12 +1106,6 @@ MmuLoadKernel(
     if (stackVirtual == 0) {
         ERROR("MmuLoadKernel: Stack mapping not found");
         return OS_ENOENT;
-    }
-
-    // Remap the framebuffer for good times
-    osStatus = __RemapFramebuffer(memorySpace);
-    if (osStatus != OS_EOK) {
-        return osStatus;
     }
 
     // Create all the kernel mappings

@@ -231,9 +231,8 @@ ScInstallSignalHandler(
 }
 
 /**
- * @brief Maps the boot framebuffer into the calling process. The caller needs
- * the boot-video capability. On success the kernel stops printing its log to
- * the screen, because the caller now draws on it.
+ * @brief Maps the boot framebuffer into the calling process, so the syslog
+ * service can draw the log on it. The caller needs the boot-video capability.
  */
 oserr_t
 ScMapBootFramebuffer(
@@ -273,7 +272,6 @@ ScMapBootFramebuffer(
         return oserr;
     }
 
-    LogReleaseScreen();
     *bufferOut = (void*)fbVirtual;
     return OS_EOK;
 }

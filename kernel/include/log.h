@@ -17,7 +17,8 @@
  * Kernel Log
  * - All kernel messages, and the messages userspace writes with the Debug
  *   system call, go into one ring buffer. Each message is also printed to the
- *   serial port, and to the screen while screen output is turned on.
+ *   serial port. The kernel never draws on the screen. The syslog service
+ *   reads the buffer and draws it on the boot framebuffer.
  * - When the buffer is full, the oldest messages are dropped to make room.
  * - Userspace reads the buffer with LogRead, by sequence number.
  */
@@ -51,36 +52,20 @@ KERNELAPI void KERNELABI
 LogInitializeFull(void);
 
 /**
- * @brief Turns printing of messages to the screen on or off. Serial output
- * does not depend on this. Turning it on also prints any messages that are
- * still waiting, for example the ones logged before the serial port was set up.
- * Has no effect after LogReleaseScreen.
- *
- * @param enable Nonzero to print to the screen, zero to stop.
+ * @brief Prints the messages that are waiting for the serial port. Call it
+ * right after the serial port is set up, so the messages logged before that
+ * are printed without waiting for the next message.
  */
 KERNELAPI void KERNELABI
-LogSetRenderMode(
-    _In_ int enable);
-
-/**
- * @brief Stops printing messages to the screen, because a userspace process
- * mapped the boot framebuffer and now draws the log itself. LogSetRenderMode
- * cannot turn the screen back on after this. Only LogEnterPanicMode does.
- *
- * Messages are still stored and printed to the serial port. When there is no
- * serial port, they are only stored, for the process to read with LogRead.
- */
-KERNELAPI void KERNELABI
-LogReleaseScreen(void);
+LogFlush(void);
 
 /**
  * @brief Switches the log to panic mode. Call it when the system stops after
  * a fatal error. The mode cannot be left again.
  *
  * In panic mode the log never waits on a lock that may never be released.
- * Messages that have not been printed yet are printed right away, screen
- * output is turned on (also after LogReleaseScreen), and each new message is
- * printed before the call returns.
+ * Messages that have not been printed yet are printed right away, and each
+ * new message is printed to the serial port before the call returns.
  */
 KERNELAPI void KERNELABI
 LogEnterPanicMode(void);

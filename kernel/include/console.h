@@ -16,9 +16,9 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  *
  *
- * MollenOS Console Interface (Boot)
- * - Contains the implementation and interface of the output environment
- *   for the operating system.
+ * Boot Video Query
+ * - Hands the boot video mode to userspace. The kernel does not draw on the
+ *   screen. The syslog service does.
  */
 
 #ifndef __CONSOLE_INTERFACE_H__
@@ -27,21 +27,13 @@
 #include <os/osdefs.h>
 #include <os/types/video.h>
 
-/* InitializeFramebufferOutput (@arch)
- * Initializes the video framebuffer of the operating system. This enables visual rendering
- * of the operating system debug console. */
-KERNELAPI oserr_t KERNELABI
-InitializeFramebufferOutput(void);
-
-/* InitializeConsole
- * Initializes the output environment. This enables either visual representation
- * and debugging of the kernel and enables a serial debugger. */
-KERNELAPI oserr_t KERNELABI
-ConsoleInitialize(void);
-
-/* VideoQuery
- * Renders a character with default colors
- * at the current terminal position */
+/**
+ * @brief Copies the boot video mode. Userspace reads it through the system
+ * query call, so the syslog service knows how to draw on the framebuffer.
+ *
+ * @param videoDescriptor Receives the boot video mode.
+ * @return OS_EOK on success, or OS_ENOTSUPPORTED for a NULL argument.
+ */
 KERNELAPI oserr_t KERNELABI
 VideoQuery(
 	_Out_ OSBootVideoDescriptor_t *videoDescriptor);

@@ -15,19 +15,14 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  *
  *
- * Debug Console Implementation
- *  - Provides an interface for creating and initializing the output system
- *    and the debug console
+ * Boot Video Query
+ * - Hands the boot video mode to userspace. The kernel does not draw on the
+ *   screen. The syslog service does.
  */
 
 #include <arch/output.h>
-#include <string.h>
 #include <console.h>
-#include <math.h>
-#include <log.h>
-
-#define COLOR_BG 0xFF000000
-#define COLOR_FG 0xFFFFFFFF
+#include <string.h>
 
 oserr_t
 VideoQuery(
@@ -38,36 +33,5 @@ VideoQuery(
 	}
 
 	memcpy(videoDescriptor, &VideoGetTerminal()->Info, sizeof(OSBootVideoDescriptor_t));
-	return OS_EOK;
-}
-
-oserr_t
-ConsoleInitialize(void)
-{
-    oserr_t osStatus;
-
-    // Initialize visual representation by framebuffer
-#ifdef __OSCONFIG_HAS_VIDEO
-    osStatus = InitializeFramebufferOutput();
-    if (osStatus == OS_EOK) {
-        VideoClear(COLOR_BG);
-#ifdef __OSCONFIG_DEBUGCONSOLE
-        // Define some virtual borders to prettify just a little
-        VideoGetTerminal()->CursorX = VideoGetTerminal()->CursorStartX = 5;
-        VideoGetTerminal()->CursorLimitX -= 10;
-        VideoGetTerminal()->CursorY = VideoGetTerminal()->CursorStartY = 5;
-        VideoGetTerminal()->CursorLimitY -= 10;
-
-        // Set colors as requested
-        VideoGetTerminal()->BgColor = COLOR_BG;
-        VideoGetTerminal()->FgColor = COLOR_FG;
-#endif
-    }
-#endif
-
-	// Only enable the log if we have any outputs
-	if (VideoGetTerminal()->AvailableOutputs != 0) {
-		LogSetRenderMode(1);	
-	}
 	return OS_EOK;
 }
