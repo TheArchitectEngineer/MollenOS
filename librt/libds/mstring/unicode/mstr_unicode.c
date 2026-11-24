@@ -22,6 +22,18 @@
 
 #define IS_UTF8(c) (((c) & 0xC0) == 0x80)
 
+// mstr_next returns U+FFFD (the Unicode replacement character) for a byte that
+// does not start a valid UTF-8 sequence.
+#define __UTF8_REPLACEMENT_CHARACTER 0xFFFD
+
+// Highest character that Unicode defines (U+10FFFF).
+#define __UTF8_MAX_CHARACTER 0x10FFFF
+
+// U+D800 to U+DFFF are reserved for UTF-16 surrogate pairs. They are not
+// characters, so UTF-8 must not encode them.
+#define __UTF8_SURROGATE_FIRST 0xD800
+#define __UTF8_SURROGATE_LAST  0xDFFF
+
 static uint32_t g_utf8OffsetTable[6] = {
         0x00000000UL, 0x00003080UL, 0x000E2080UL,
         0x03C82080UL, 0xFA082080UL, 0x82082080UL
@@ -71,30 +83,69 @@ mchar_t mstr_tochar(const char* u8)
 
 mchar_t mstr_next(const char* u8, int* indexp)
 {
-    mchar_t currentChar  = 0;
-    int     size         = 0;
-    int     currentIndex = *indexp;
+    const unsigned char* bytes;
+    mchar_t              character;
+    mchar_t              minimum;
+    int                  length;
+    int                  i;
 
-    if (u8 == NULL || !*u8) {
+    if (u8 == NULL || indexp == NULL) {
         return MSTRING_EOS;
     }
 
-    /**
-     * UTF8 is encoded so that the first byte can be anything, but
-     * the following bytes in the sequence will be continuation-byte formatted (b & 0xC0 == 80).
-     * That means the first byte will always be valid, and thus we should only check from byte 2.
-     */
-    do {
-        currentChar <<= 6;
-        currentChar += (unsigned char)u8[currentIndex++];
-        size++;
-    } while (u8[currentIndex] && IS_UTF8(u8[currentIndex]));
+    // Stay on the zero terminator, so a call at the end of the string never
+    // moves the index past it.
+    bytes = (const unsigned char*)u8 + *indexp;
+    if (bytes[0] == 0) {
+        return MSTRING_EOS;
+    }
 
-    // size will never be 0, and thus this is perfectly valid
-    currentChar -= g_utf8OffsetTable[size - 1];
+    if (bytes[0] < 0x80) {
+        (*indexp)++;
+        return bytes[0];
+    }
 
-    *indexp = currentIndex;
-    return currentChar;
+    // The lead byte gives the length of the sequence and the top bits of the
+    // character. Each length also has a smallest character it may encode.
+    // Anything smaller is an overlong form, which must be rejected.
+    if ((bytes[0] & 0xE0) == 0xC0) {
+        character = bytes[0] & 0x1F;
+        minimum   = 0x80;
+        length    = 2;
+    } else if ((bytes[0] & 0xF0) == 0xE0) {
+        character = bytes[0] & 0x0F;
+        minimum   = 0x800;
+        length    = 3;
+    } else if ((bytes[0] & 0xF8) == 0xF0) {
+        character = bytes[0] & 0x07;
+        minimum   = 0x10000;
+        length    = 4;
+    } else {
+        // A continuation byte without a lead byte, or a byte from 0xF8 to
+        // 0xFF. Those bytes started the old 5 and 6 byte forms, which UTF-8
+        // no longer allows.
+        (*indexp)++;
+        return __UTF8_REPLACEMENT_CHARACTER;
+    }
+
+    // The zero terminator is not a continuation byte, so this stops at the end
+    // of the string when the sequence is cut off.
+    for (i = 1; i < length; i++) {
+        if (!IS_UTF8(bytes[i])) {
+            (*indexp)++;
+            return __UTF8_REPLACEMENT_CHARACTER;
+        }
+        character = (character << 6) | (bytes[i] & 0x3F);
+    }
+
+    if (character < minimum || character > __UTF8_MAX_CHARACTER ||
+        (character >= __UTF8_SURROGATE_FIRST && character <= __UTF8_SURROGATE_LAST)) {
+        (*indexp)++;
+        return __UTF8_REPLACEMENT_CHARACTER;
+    }
+
+    *indexp += length;
+    return character;
 }
 
 size_t mstr_len_u8(const char* u8)

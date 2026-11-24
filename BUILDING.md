@@ -101,3 +101,27 @@ cd <build> # where you have your build folder
 make install_img # to generate a .img file
 make install_vmdk # to generate a .vmdk file
 ```
+
+### UTF-8 decoding in libds
+
+`mstr_next` in `librt/libds/mstring/unicode/mstr_unicode.c` reads one UTF-8
+character from a string. `mstr_len_u8`, `mstr_new_u8`, `mstr_fmt` and the
+other mstring functions that take a `char*` read their input through it. It
+reads at most 4 bytes per character and never reads past the zero terminator.
+A byte that does not start a valid sequence gives U+FFFD, and the index moves
+past that one byte. At the end of the string it returns `MSTRING_EOS`
+(0xFFFFFFFF) and leaves the index where it is. Run the suite from the
+repository root:
+
+```sh
+python3 testing/libds_utf8_test.py --mutation-check
+```
+
+It needs Python 3 and host Clang with ASan, UBSan and the leak checker. It
+builds the mstring sources with each input copied to a buffer of the exact
+size, so a read past the terminator stops the test. The cases cover valid 1 to
+4 byte characters, sequences cut off by the end of the string or by a byte
+that is not a continuation byte, long runs of continuation bytes, overlong forms, surrogates and values
+above U+10FFFF. They also check that `mstr_len_u8`, `mstr_u8_to_internal` and
+`mstr_new_u8` agree with `mstr_next`. The suite is registered with the host
+CTest build.

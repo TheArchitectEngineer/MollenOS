@@ -23,7 +23,9 @@
 #include <stdarg.h>
 
 typedef uint32_t mchar_t;
-#define MSTRING_EOS 0xFFFD // Marker for identifying end of string
+// Returned by mstr_next at the end of the string. It is above U+10FFFF, so it
+// never equals a decoded character.
+#define MSTRING_EOS 0xFFFFFFFF
 #define MSTRING_U8BYTES 10
 
 typedef struct mstring {
@@ -80,13 +82,21 @@ DSDECL(mchar_t, mstr_tochar(const char* u8));
 DSDECL(int, mstr_fromchar(mchar_t character, char* u8, size_t* length));
 
 /**
- * @brief Iterates and converts one UTF-8 character to an UTF32 code point. The
- * index value should start out at 0, and will automatically be incremented as
- * the conversion happens. There are no boundary checks using this function, and
- * it's important to use mstr_u8_len first to get the actual number of characters.
- * @param u8     A pointer to the UTF-8 encoded string.
- * @param indexp A pointer to a zero index value, which will be modified.
- * @return       The converted UTF32 code point.
+ * @brief Converts the UTF-8 character at *indexp to an UTF32 code point and
+ * moves *indexp past it. The index should start out at 0. A character is at
+ * most 4 bytes long, and no byte after the zero terminator is read.
+ *
+ * A byte that does not start a valid sequence gives U+FFFD, and the index moves
+ * past that one byte only. This covers continuation bytes without a lead byte,
+ * sequences cut off by the end of the string or by a byte that is not a
+ * continuation byte, overlong forms, surrogates (U+D800 to U+DFFF) and values
+ * above U+10FFFF.
+ *
+ * @param u8     A pointer to the zero terminated UTF-8 string.
+ * @param indexp A pointer to the byte index into u8, which is updated.
+ * @return       The converted UTF32 code point, or MSTRING_EOS when u8 or
+ *               indexp is NULL or the index is at the zero terminator. The
+ *               index is not changed in that case.
  */
 DSDECL(mchar_t, mstr_next(const char* u8, int* indexp));
 DSDECL(size_t,  mstr_len_u8(const char* u8));
