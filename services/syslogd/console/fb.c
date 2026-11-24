@@ -1,5 +1,5 @@
 /**
- * Copyright 2023, Philip Meulengracht
+ * Copyright 2026, Philip Meulengracht
  *
  * This program is free software : you can redistribute it and / or modify
  * it under the terms of the GNU General Public License as published by
@@ -13,35 +13,26 @@
  *
  * You should have received a copy of the GNU General Public License
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
+ *
+ * Framebuffer
+ * - Draws text grid rows on the boot framebuffer.
+ *
+ * Font layout (font.c):
+ * - g_fontIndices lists the code points that have a glyph, sorted from low to
+ *   high. Glyph i is stored at g_font[i * g_fontHeight].
+ * - Each glyph has one byte per pixel row. Bit 7 is the leftmost pixel.
+ * - Glyph 0 is the box drawn for code points without a glyph.
  */
 
-#include <ds/mstring.h>
-#include "screen.h"
 #include <stdlib.h>
 #include <string.h>
+#include "fb.h"
 
-struct Rectangle {
-    uint32_t Left, Top, Right, Bottom;
-};
+// Bytes in one pixel. The bootloader only hands over 32 bit modes.
+#define __FB_BYTES_PER_PIXEL 4
 
-struct OutputFB {
-    struct Output    Base;
-    void*            Framebuffer;
-    void*            Backbuffer;
-    uint32_t         PositionX;
-    uint32_t         PositionY;
-    struct Rectangle ScreenSize;
-    struct Rectangle Bounds;
-    uint32_t         ColorBackground;
-    uint32_t         ColorText;
-    uint32_t         BytesPerScanline;
-    uint32_t         Depth; // Bytes
-
-    VideoColorComponent_t Red;
-    VideoColorComponent_t Green;
-    VideoColorComponent_t Blue;
-    VideoColorComponent_t Alpha;
-};
+// Background color of the screen, as 0xRRGGBB.
+#define __FB_BACKGROUND 0x000000
 
 extern const uint32_t g_fontHeight;
 extern const uint32_t g_fontWidth;
@@ -49,260 +40,222 @@ extern const uint32_t g_fontCharCount;
 extern const uint8_t  g_font[];
 extern const uint16_t g_fontIndices[];
 
-static void __fb_print(struct Output*, const char*);
-static void __fb_clear(struct Output*, uint8_t, uint8_t, uint8_t);
-static void __fb_flush(struct Output*);
-static void __fb_inhibit(struct Output*);
-static void __fb_uninhibit(struct Output*);
-static struct OutputOperations g_fbOps = {
-        .Print = __fb_print,
-        .Clear = __fb_clear,
-        .Flush = __fb_flush,
-        .Inhibit = __fb_inhibit,
-        .Uninhibit = __fb_uninhibit
-};
+// Each cell is one pixel wider than the glyphs, which leaves a gap between
+// characters.
+static inline uint32_t
+__CellWidth(void)
+{
+    return g_fontWidth + 1;
+}
+
+/**
+ * @brief Finds the glyph of a code point with a binary search in
+ * g_fontIndices. Returns glyph 0 when the font has no glyph for it.
+ */
+static uint32_t
+__FindGlyph(
+    _In_ uint32_t character)
+{
+    uint32_t low  = 0;
+    uint32_t high = g_fontCharCount;
+
+    while (low < high) {
+        uint32_t middle = low + (high - low) / 2;
+        if (g_fontIndices[middle] == character) {
+            return middle;
+        }
+        
+        if (g_fontIndices[middle] < character) {
+            low = middle + 1;
+        } else {
+            high = middle;
+        }
+    }
+    return 0;
+}
 
 static uint32_t
-__CreateColor(
-        _In_ struct OutputFB* fb,
-        _In_ uint8_t          r,
-        _In_ uint8_t          g,
-        _In_ uint8_t          b,
-        _In_ uint8_t          a)
+__ScaleComponent(
+    _In_ const VideoColorComponent_t* component,
+    _In_ uint32_t                     value)
 {
-    uint32_t color =
-            ((uint32_t)r << fb->Red.Position) |
-            ((uint32_t)g << fb->Green.Position) |
-            ((uint32_t)b << fb->Blue.Position);
-    if (fb->Depth == 4) {
-        return color | ((uint32_t)a << fb->Alpha.Position);
-    }
-    return color;
-}
-
-struct Output*
-ScreenCreateFB(
-        _In_ OSBootVideoDescriptor_t* video)
-{
-    struct OutputFB* fb;
-    void*            bb;
-    size_t           size;
-
-    if (video->Type != OSBOOTVIDEO_FRAMEBUFFER) {
-        return NULL;
-    }
-
-    // Calculate and allocate a backbuffer first, it's easier to cleanup
-    // again should anything fail
-    size = video->BytesPerScanline * video->Height;
-    bb = malloc(size);
-    if (bb == NULL) {
-        return NULL;
-    }
-
-    fb = malloc(sizeof(struct OutputFB));
-    if (fb == NULL) {
-        free(bb);
-        return NULL;
-    }
-    memset(fb, 0, sizeof(struct OutputFB));
-
-    fb->Framebuffer = BootVideoMapFramebuffer();
-    if (fb == NULL) {
-        free(bb);
-        free(fb);
-        return NULL;
-    }
-    fb->Backbuffer = bb;
-    fb->Base.Ops = &g_fbOps;
-    return &fb->Base;
+    // value is 0 to 255. Scale it to the 0 to Mask range of the component.
+    return ((value * component->Mask) / 0xFF) << component->Position;
 }
 
 static void
-__RenderCharacter(
-        _In_ struct OutputFB* output,
-        _In_ uint32_t         cp)
+__FillScratch(
+    _In_ Framebuffer_t* framebuffer,
+    _In_ uint32_t       pixel)
 {
-    uint32_t*    fbPointer;
-    uint32_t*    bbPointer;
-    uint8_t*     charData;
-    size_t       offset;
-    unsigned int row, i;
-
-    // Calculate the video-offset
-    offset    = (output->PositionY * output->BytesPerScanline) + (output->PositionX * output->Depth);
-    fbPointer = (uint32_t*)((uint8_t*)output->Framebuffer + offset);
-    bbPointer = (uint32_t*)((uint8_t*)output->Backbuffer + offset);
-
-    // TODO cache these entries
-    for (i = 0; i < g_fontCharCount; i++) {
-        if (g_fontIndices[i] == (uint16_t)cp) {
-            break;
+    for (uint32_t y = 0; y < g_fontHeight; y++) {
+        uint32_t* line = (uint32_t*)(framebuffer->Scratch + (size_t)y * framebuffer->BytesPerScanline);
+        for (uint32_t x = 0; x < framebuffer->Width; x++) {
+            line[x] = pixel;
         }
     }
-    if (i == g_fontCharCount) {
+}
+
+/**
+ * @brief Draws one cell into Scratch. Only the set pixels of the glyph are
+ * written. The background was filled before.
+ */
+static void
+__DrawCell(
+    _In_ Framebuffer_t*    framebuffer,
+    _In_ uint32_t          column,
+    _In_ const TextCell_t* cell)
+{
+    const uint8_t* glyph = &g_font[__FindGlyph(cell->Character) * g_fontHeight];
+    uint32_t       pixel = FramebufferColor(framebuffer, cell->Color);
+    uint32_t       left  = FRAMEBUFFER_MARGIN + column * __CellWidth();
+
+    for (uint32_t y = 0; y < g_fontHeight; y++) {
+        uint32_t* line = (uint32_t*)(framebuffer->Scratch + (size_t)y * framebuffer->BytesPerScanline);
+        for (uint32_t x = 0; x < __CellWidth() && x < 8; x++) {
+            if (glyph[y] & (0x80 >> x)) {
+                line[left + x] = pixel;
+            }
+        }
+    }
+}
+
+/**
+ * @brief Copies Scratch to the framebuffer, with its top at pixel row top.
+ */
+static void
+__CopyScratch(
+    _In_ Framebuffer_t* framebuffer,
+    _In_ uint32_t       top)
+{
+    memcpy(
+        framebuffer->Pixels + (size_t)top * framebuffer->BytesPerScanline,
+        framebuffer->Scratch,
+        (size_t)g_fontHeight * framebuffer->BytesPerScanline
+    );
+}
+
+oserr_t
+FramebufferCheckMode(
+    _In_ const OSBootVideoDescriptor_t* video)
+{
+    if (video == NULL) {
+        return OS_EINVALPARAMS;
+    }
+
+    if (video->Type != OSBOOTVIDEO_FRAMEBUFFER || video->DepthBits != 32 ||
+        video->BytesPerScanline < video->Width * __FB_BYTES_PER_PIXEL) {
+        return OS_ENOTSUPPORTED;
+    }
+
+    // At least one cell must fit inside the margin.
+    if (video->Width < 2 * FRAMEBUFFER_MARGIN + __CellWidth() ||
+        video->Height < 2 * FRAMEBUFFER_MARGIN + g_fontHeight) {
+        return OS_ENOTSUPPORTED;
+    }
+    return OS_EOK;
+}
+
+oserr_t
+FramebufferCreate(
+    _In_ Framebuffer_t*                 framebuffer,
+    _In_ const OSBootVideoDescriptor_t* video,
+    _In_ void*                          pixels)
+{
+    uint32_t textWidth;
+    uint32_t textHeight;
+    oserr_t  status;
+
+    if (framebuffer == NULL || video == NULL || pixels == NULL) {
+        return OS_EINVALPARAMS;
+    }
+
+    status = FramebufferCheckMode(video);
+    if (status != OS_EOK) {
+        return status;
+    }
+    textWidth  = (uint32_t)video->Width - 2 * FRAMEBUFFER_MARGIN;
+    textHeight = (uint32_t)video->Height - 2 * FRAMEBUFFER_MARGIN;
+
+    // Scratch is zeroed because the padding at the end of each scanline is
+    // copied to the framebuffer too, and is never drawn.
+    memset(framebuffer, 0, sizeof(Framebuffer_t));
+    framebuffer->Scratch = calloc(g_fontHeight, video->BytesPerScanline);
+    if (framebuffer->Scratch == NULL) {
+        return OS_EOOM;
+    }
+
+    framebuffer->Pixels           = pixels;
+    framebuffer->Width            = (uint32_t)video->Width;
+    framebuffer->Height           = (uint32_t)video->Height;
+    framebuffer->BytesPerScanline = (uint32_t)video->BytesPerScanline;
+    framebuffer->Columns          = textWidth / __CellWidth();
+    framebuffer->Rows             = textHeight / g_fontHeight;
+    framebuffer->Red              = video->Red;
+    framebuffer->Green            = video->Green;
+    framebuffer->Blue             = video->Blue;
+    framebuffer->Alpha            = video->Alpha;
+    return OS_EOK;
+}
+
+void
+FramebufferDestroy(
+    _In_ Framebuffer_t* framebuffer)
+{
+    if (framebuffer == NULL) {
         return;
     }
+    free(framebuffer->Scratch);
+    framebuffer->Scratch = NULL;
+}
 
-    charData = (uint8_t*)&g_fontIndices[i * g_fontHeight];
-    for (row = 0; row < g_fontHeight; row++) {
-        uint8_t bmpData = charData[row];
-        for (i = 0; i < 8; i++) {
-            bbPointer[i] = fbPointer[i] =
-                    (bmpData >> (7 - i)) & 0x1 ? (0xFF000000 | output->ColorText) : (0xFF000000 | output->ColorBackground);
+uint32_t
+FramebufferColor(
+    _In_ const Framebuffer_t* framebuffer,
+    _In_ uint32_t             rgb)
+{
+    return __ScaleComponent(&framebuffer->Red, (rgb >> 16) & 0xFF) |
+           __ScaleComponent(&framebuffer->Green, (rgb >> 8) & 0xFF) |
+           __ScaleComponent(&framebuffer->Blue, rgb & 0xFF) |
+           __ScaleComponent(&framebuffer->Alpha, 0xFF);
+}
+
+void
+FramebufferClear(
+    _In_ Framebuffer_t* framebuffer)
+{
+    uint32_t top;
+
+    // Scratch is one text row high, so the screen is filled one text row at
+    // a time. The last copy is moved up to end at the bottom of the screen,
+    // which covers the rows that are left when the height is not a multiple
+    // of the font height.
+    __FillScratch(framebuffer, FramebufferColor(framebuffer, __FB_BACKGROUND));
+    for (top = 0; top + g_fontHeight <= framebuffer->Height; top += g_fontHeight) {
+        __CopyScratch(framebuffer, top);
+    }
+    if (top < framebuffer->Height) {
+        __CopyScratch(framebuffer, framebuffer->Height - g_fontHeight);
+    }
+}
+
+void
+FramebufferDrawGrid(
+    _In_ Framebuffer_t* framebuffer,
+    _In_ TextGrid_t*    grid)
+{
+    uint32_t background = FramebufferColor(framebuffer, __FB_BACKGROUND);
+
+    // DirtyFirst is larger than DirtyLast when no row changed, and then the
+    // loop does not run.
+    for (uint32_t row = grid->DirtyFirst; row <= grid->DirtyLast && row < grid->Rows; row++) {
+        const TextCell_t* cells = TextGridRow(grid, row);
+
+        __FillScratch(framebuffer, background);
+        for (uint32_t column = 0; column < grid->Columns; column++) {
+            __DrawCell(framebuffer, column, &cells[column]);
         }
-        fbPointer = (uint32_t*)((uint8_t*)fbPointer + output->BytesPerScanline);
-        bbPointer = (uint32_t*)((uint8_t*)bbPointer + output->BytesPerScanline);
+        __CopyScratch(framebuffer, FRAMEBUFFER_MARGIN + row * g_fontHeight);
     }
-}
-
-static void
-__Scroll(
-        _In_ struct OutputFB* output,
-        _In_ int              lineCount)
-{
-    uint8_t* bb = (uint8_t*)output->Backbuffer;
-    uint8_t* videoPointer;
-    size_t   bytesToCopy;
-    int      lines;
-    int      i, j;
-
-    // How many lines do we need to modify?
-    lines = (int)(output->Bounds.Bottom - output->Bounds.Top);
-
-    // Calculate the initial screen position
-    videoPointer = bb
-            + (output->Bounds.Top * output->BytesPerScanline)
-            + (output->Bounds.Left * output->Depth);
-    bytesToCopy = ((output->Bounds.Right - output->Bounds.Left) * output->Depth);
-    for (i = 0; i < lineCount; i++) {
-        for (j = 0; j < lines; j++) {
-            memcpy(
-                    videoPointer,
-                    videoPointer + (output->BytesPerScanline * g_fontHeight),
-                    bytesToCopy
-            );
-            videoPointer += output->BytesPerScanline;
-        }
-    }
-
-    // Clear out the lines that was scrolled
-    // Scroll pointer down to bottom - n lines
-    videoPointer = bb + (output->Bounds.Left * output->Depth);
-    videoPointer += output->BytesPerScanline * (output->Bounds.Bottom - (g_fontHeight * lineCount));
-    for (i = 0; i < ((int)g_fontHeight * lineCount); i++) {
-        memset(videoPointer, 0xFF, bytesToCopy);
-        videoPointer += output->BytesPerScanline;
-    }
-
-    // We did the scroll, modify cursor
-    output->PositionY -= (g_fontHeight * lineCount);
-}
-
-static void
-__PrintCharacter(
-        _In_ struct OutputFB* output,
-        _In_ uint32_t         cp)
-{
-    switch (cp) {
-        // New-Line
-        // Reset X and increase Y
-        case U'\n': {
-            output->PositionX = output->Bounds.Left;
-            output->PositionY += g_fontHeight;
-        } break;
-
-        // Carriage Return
-        // Reset X don't increase Y
-        case U'\r': {
-            output->PositionX = output->Bounds.Left;
-        } break;
-
-        // Default
-        // Printable character
-        default: {
-        // Call print with the current location
-        // and use the current colors
-            __RenderCharacter(output, cp);
-            output->PositionX += (g_fontWidth + 1);
-        } break;
-    }
-
-    // Next step is to do some post-print
-    // checks, including new-line and scroll-checks
-
-    // Are we at last X position? - New-line
-    if ((output->PositionX + (g_fontWidth + 1)) >= output->Bounds.Right) {
-        output->PositionX = output->Bounds.Left;
-        output->PositionY += g_fontHeight;
-    }
-
-    // Do we need to scroll the terminal?
-    if ((output->PositionY + g_fontHeight) >= output->Bounds.Bottom) {
-        __Scroll(output, 1);
-    }
-}
-
-static void
-__fb_print(
-        _In_ struct Output* output,
-        _In_ const char*    string)
-{
-    struct OutputFB* fb    = (struct OutputFB*)output;
-    size_t           count = mstr_len_u8(string);
-    int              idx   = 0;
-
-    for (size_t i = 0; i < count; i++) {
-        uint32_t cp = mstr_next(string, &idx);
-        __PrintCharacter(fb, cp);
-    }
-}
-
-static void
-__fb_flush(
-        _In_ struct Output* output)
-{
-    struct OutputFB* fb = (struct OutputFB*)output;
-    size_t byteCount = fb->BytesPerScanline * fb->ScreenSize.Bottom;
-    memcpy(fb->Framebuffer, fb->Backbuffer, byteCount);
-}
-
-static inline void
-memset32(uint32_t* out, uint32_t value, size_t byteCount)
-{
-    size_t count = byteCount >> 2;
-    while (count) {
-        *(out++) = value;
-        count--;
-    }
-}
-
-static void
-__fb_clear(
-        _In_ struct Output* output,
-        _In_ uint8_t        r,
-        _In_ uint8_t        g,
-        _In_ uint8_t        b)
-{
-    struct OutputFB* fb        = (struct OutputFB*)output;
-    uint32_t         color     = __CreateColor(fb, r, g, b, 0xFF);
-    size_t           byteCount = fb->BytesPerScanline * fb->ScreenSize.Bottom;
-    memset32(fb->Backbuffer, color, byteCount);
-    memset32(fb->Framebuffer, color, byteCount);
-}
-
-static void
-__fb_inhibit(
-        _In_ struct Output* output)
-{
-    struct OutputFB* fb = (struct OutputFB*)output;
-    _CRT_UNUSED(fb);
-}
-
-static void
-__fb_uninhibit(
-        _In_ struct Output* output)
-{
-    struct OutputFB* fb = (struct OutputFB*)output;
-    _CRT_UNUSED(fb);
+    TextGridClearDirty(grid);
 }

@@ -13,10 +13,12 @@ set_source_files_properties ( ${ADDITONAL_SOURCES} PROPERTIES GENERATED TRUE )
 
 add_service_target(syslogd ""
     ${ADDITONAL_SOURCES}
-    console/font.c
+    console/console.c
     console/fb.c
-    console/log.c
+    console/font.c
+    console/text.c
     main.c
+    reader.c
 )
 add_dependencies(syslogd service_servers)
 deploy_file_to_initrd(syslogd "services" syslogd.yaml)
