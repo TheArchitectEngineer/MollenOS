@@ -63,7 +63,6 @@ project (ValiOS)
 # Setup options and defaults
 option (VALI_ENABLE_KERNEL_TRACE "Enable debug tracing in the kernel" ON)
 option (VALI_ENABLE_SMP "Enable support for multiple cores" ON)
-option (VALI_ENABLE_DEBUG_CONSOLE "Enable the debug console on boot instead of splash" ON)
 option (VALI_ENABLE_DEBUG_MODE "Enter the debug console mode after boot instead of normal system startup" ON)
 option (VALI_ENABLE_NESTED_IRQS "Enable nested IRQs instead of traditional single IRQs" OFF)
 option (VALI_ENABLE_SIGNALS "Enable support for thread signals" ON)
